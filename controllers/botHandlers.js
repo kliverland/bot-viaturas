@@ -1,4 +1,5 @@
 // controllers/botHandlers.js
+'use strict';
 const TelegramBot = require('node-telegram-bot-api');
 const config = require('../config');
 const stateManager = require('../stateManager');

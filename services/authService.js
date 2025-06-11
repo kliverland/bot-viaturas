@@ -1,4 +1,5 @@
 // services/authService.js
+'use strict';
 const db = require('../db');
 const { temPermissao } = require('../utils');
 const stateManager = require('../stateManager');

@@ -1,4 +1,5 @@
 // utils.js
+'use strict';
 const { NIVEIS_PERMISSAO, ANTECEDENCIA_MINIMA_MINUTOS } = require('./config');
 
 function formatarDataHora() {

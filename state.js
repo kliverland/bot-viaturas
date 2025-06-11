@@ -1,4 +1,5 @@
 // state.js
+'use strict';
 const db = require('./db'); // Importa o db para usar as novas funções
 
 // --- LÓGICA DE SESSÃO COM BANCO DE DADOS ---
