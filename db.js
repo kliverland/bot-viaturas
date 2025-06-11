@@ -1,4 +1,5 @@
 // db.js
+'use strict';
 const mysql = require('mysql2/promise');
 const { DB_CONFIG } = require('./config');
 

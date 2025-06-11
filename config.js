@@ -1,4 +1,5 @@
 // config.js
+'use strict';
 require('dotenv').config(); // Carrega variáveis do .env
 
 module.exports = {

@@ -1,4 +1,5 @@
 // services/requestService.js
+'use strict';
 const db = require('../db');
 const utils = require('../utils');
 const authService = require('./authService');

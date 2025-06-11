@@ -1,4 +1,5 @@
 // stateManager.js
+'use strict';
 const db = require('./db');
 
 class StateManager {

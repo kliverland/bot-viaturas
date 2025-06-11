@@ -1,4 +1,5 @@
 // services/vehicleService.js
+'use strict';
 const db = require('../db');
 const { STATUS_VIATURAS } = require('../config');
 const stateManager = require('../stateManager');

@@ -1,4 +1,5 @@
 // main.js
+'use strict';
 require('dotenv').config(); // Carrega .env antes de tudo
 
 const TelegramBot = require('node-telegram-bot-api');
