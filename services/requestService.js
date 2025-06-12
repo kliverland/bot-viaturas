@@ -191,7 +191,11 @@ async function processarEntradaMotivoSolicitacao(bot, userId, texto) {
     }
     sessao.motivo = texto.trim();
     await stateManager.setSession(userId, sessao);
-    bot.sendMessage(sessao.chatId, `✅ *Motivo salvo:* ${texto.trim()}`, { parse_mode: 'Markdown' });
+    bot.sendMessage(
+        sessao.chatId,
+        `✅ *Motivo salvo:* ${utils.escapeMarkdown(sessao.motivo)}`,
+        { parse_mode: 'Markdown' }
+    );
     await processarSolicitacaoFinal(bot, userId);
     return true;
 }
@@ -252,17 +256,21 @@ Por favor, escolha um horário com mais antecedência.
         await db.salvarSolicitacaoDB(solicitacao);
         stateManager.setRequest(idSolicitacao, solicitacao);
 
-        const msgSolicitante = await bot.sendMessage(sessao.chatId, `
+        const msgSolicitante = await bot.sendMessage(
+            sessao.chatId,
+            `
 🟡 *SOLICITAÇÃO ENVIADA - ${idSolicitacao}*
 
 📋 *Dados da solicitação:*
-- Solicitante: ${sessao.nomeUsuario}
+- Solicitante: ${utils.escapeMarkdown(sessao.nomeUsuario)}
 - Data/Hora necessidade: ${dataHoraNecessidadeDisplay}
-- Motivo: ${sessao.motivo}
+- Motivo: ${utils.escapeMarkdown(sessao.motivo)}
 
 ⏳ *Status: Aguardando vistoriador...*
 Você será notificado sobre o andamento.
-        `, { parse_mode: 'Markdown' });
+            `,
+            { parse_mode: 'Markdown' }
+        );
         solicitacao.messageIds.solicitante = msgSolicitante.message_id;
         stateManager.setRequest(idSolicitacao, solicitacao);
 
@@ -290,9 +298,9 @@ async function notificarVistoriadores(bot, codigoSolicitacao) {
 🔍 *NOVA SOLICITAÇÃO - ${codigoSolicitacao}*
 
 📋 *Detalhes:*
-- Solicitante: ${solicitacao.solicitante.nome}
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Motivo: ${solicitacao.motivo}
+- Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}
 
 ⏰ Clique em ATENDER para responder esta solicitação.
     `;
@@ -326,9 +334,9 @@ async function renotificarVistoriadores(bot, codigoSolicitacao) {
 ⚠️ *SOLICITAÇÃO PENDENTE - ${codigoSolicitacao}*
 
 Esta solicitação ainda aguarda vistoriador há mais de 3 minutos.
-- Solicitante: ${solicitacao.solicitante.nome}
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Motivo: ${solicitacao.motivo}
+- Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}
     `;
     const vistoriadores = await db.getUsuariosPorTipoDB('vistoriador');
     for (const vistoriador of vistoriadores) {
@@ -370,16 +378,19 @@ async function processarRespostaVistoriador(bot, userId, codigoSolicitacao) {
         for (const msg of solicitacao.messageIds.vistoriadores) {
             try {
                 if (msg.chatId !== userId) {
-                    await bot.editMessageText(`
+                    await bot.editMessageText(
+                        `
 ✅ *SOLICITAÇÃO ATENDIDA - ${codigoSolicitacao}*
 
-Sendo atendida por: ${solicitacao.vistoriador.nome}
+Sendo atendida por: ${utils.escapeMarkdown(solicitacao.vistoriador.nome)}
 
 📋 *Detalhes:*
-- Solicitante: ${solicitacao.solicitante.nome}
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Motivo: ${solicitacao.motivo}
-                    `, { chat_id: msg.chatId, message_id: msg.messageId, parse_mode: 'Markdown' });
+- Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}
+                        `,
+                        { chat_id: msg.chatId, message_id: msg.messageId, parse_mode: 'Markdown' }
+                    );
                 }
             } catch (error) {
                 console.error('Erro ao atualizar mensagem do vistoriador (outro):', error.message);
@@ -388,16 +399,19 @@ Sendo atendida por: ${solicitacao.vistoriador.nome}
     }
 
     try {
-        await bot.editMessageText(`
+        await bot.editMessageText(
+            `
 🟠 *SOLICITAÇÃO EM ANÁLISE - ${codigoSolicitacao}*
 
 📋 *Dados da solicitação:*
-- Solicitante: ${solicitacao.solicitante.nome}
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Motivo: ${solicitacao.motivo}
+- Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}
 
-🔍 *Status: Em análise - Vistoriador: ${solicitacao.vistoriador.nome}*
-        `, { chat_id: solicitacao.solicitante.chatId, message_id: solicitacao.messageIds.solicitante, parse_mode: 'Markdown' });
+🔍 *Status: Em análise - Vistoriador: ${utils.escapeMarkdown(solicitacao.vistoriador.nome)}*
+            `,
+            { chat_id: solicitacao.solicitante.chatId, message_id: solicitacao.messageIds.solicitante, parse_mode: 'Markdown' }
+        );
     } catch (error) {
         console.error('Erro ao atualizar mensagem do solicitante (em vistoria):', error);
     }
@@ -464,13 +478,13 @@ async function handleSelecionarViatura(bot, callbackQuery, codigoSolicitacao, vi
         };
         stateManager.setRequest(codigoSolicitacao, solicitacao);
 
-        await bot.editMessageText(`📋 *VIATURA SELECIONADA - ${codigoSolicitacao}*\n\n✅ Viatura: ${viaturaSelecionada.prefixo} - ${viaturaSelecionada.nome}\n\nA solicitação foi enviada para autorização.`, {
+        await bot.editMessageText(`📋 *VIATURA SELECIONADA - ${codigoSolicitacao}*\n\n✅ Viatura: ${utils.escapeMarkdown(viaturaSelecionada.prefixo)} - ${utils.escapeMarkdown(viaturaSelecionada.nome)}\n\nA solicitação foi enviada para autorização.`, {
             chat_id: callbackQuery.message.chat.id,
             message_id: callbackQuery.message.message_id,
             parse_mode: 'Markdown'
         });
 
-        await bot.editMessageText(`🔵 *SOLICITAÇÃO AGUARDANDO AUTORIZAÇÃO - ${codigoSolicitacao}*\n\n📋 *Dados da solicitação:*\n• Solicitante: ${solicitacao.solicitante.nome}\n• Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}\n• Motivo: ${solicitacao.motivo}\n• Vistoriador: ${solicitacao.vistoriador.nome}\n• Viatura: ${viaturaSelecionada.prefixo} - ${viaturaSelecionada.nome}\n\n🔵 *Status: Aguardando autorização...*`, {
+        await bot.editMessageText(`🔵 *SOLICITAÇÃO AGUARDANDO AUTORIZAÇÃO - ${codigoSolicitacao}*\n\n📋 *Dados da solicitação:*\n• Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}\n• Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}\n• Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}\n• Vistoriador: ${utils.escapeMarkdown(solicitacao.vistoriador.nome)}\n• Viatura: ${utils.escapeMarkdown(viaturaSelecionada.prefixo)} - ${utils.escapeMarkdown(viaturaSelecionada.nome)}\n\n🔵 *Status: Aguardando autorização...*`, {
             chat_id: solicitacao.solicitante.chatId,
             message_id: solicitacao.messageIds.solicitante,
             parse_mode: 'Markdown'
@@ -506,12 +520,12 @@ async function notificarAutorizadores(bot, codigoSolicitacao) {
 🔐 *SOLICITAÇÃO PARA AUTORIZAÇÃO - ${codigoSolicitacao}*
 
 📋 *Resumo da solicitação:*
-- Solicitante: ${solicitacao.solicitante.nome}
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Motivo: ${solicitacao.motivo}
-- Vistoriador: ${solicitacao.vistoriador.nome}
-- Viatura: ${solicitacao.viatura.prefixo} - ${solicitacao.viatura.nome}
-- Placa: ${solicitacao.viatura.placa}
+- Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}
+- Vistoriador: ${utils.escapeMarkdown(solicitacao.vistoriador.nome)}
+- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
+- Placa: ${utils.escapeMarkdown(solicitacao.viatura.placa)}
 
 Você autoriza esta solicitação?
     `;
@@ -546,11 +560,11 @@ async function processarAutorizacao(bot, userId, codigoSolicitacao, autorizado) 
 
         const msgText = `
 ✅ *SOLICITAÇÃO AUTORIZADA - ${codigoSolicitacao}*
-Autorizada por: ${autorizadorInfo.nome}
+Autorizada por: ${utils.escapeMarkdown(autorizadorInfo.nome)}
 📋 *Resumo da solicitação:*
-- Solicitante: ${solicitacao.solicitante.nome}
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Viatura: ${solicitacao.viatura.prefixo} - ${solicitacao.viatura.nome}`;
+- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}`;
 
         if (solicitacao.messageIds.autorizadores) {
             for (const msg of solicitacao.messageIds.autorizadores) {
@@ -562,15 +576,18 @@ Autorizada por: ${autorizadorInfo.nome}
             }
         }
         try {
-            await bot.editMessageText(`
+        await bot.editMessageText(
+            `
 ✅ *SOLICITAÇÃO AUTORIZADA - ${codigoSolicitacao}*
 📋 *Dados da solicitação:*
-- Solicitante: ${solicitacao.solicitante.nome}
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Viatura: ${solicitacao.viatura.prefixo} - ${solicitacao.viatura.nome}
-- Autorizador: ${autorizadorInfo.nome}
+- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
+- Autorizador: ${utils.escapeMarkdown(autorizadorInfo.nome)}
 🎉 *Status: AUTORIZADA! Aguardando entrega das chaves...*
-       `, { chat_id: solicitacao.solicitante.chatId, message_id: solicitacao.messageIds.solicitante, parse_mode: 'Markdown' });
+            `,
+            { chat_id: solicitacao.solicitante.chatId, message_id: solicitacao.messageIds.solicitante, parse_mode: 'Markdown' }
+        );
        } catch(e) {
            console.error("Erro edit msg solicitante (auth):", e.message);
        }
@@ -590,10 +607,10 @@ Autorizada por: ${autorizadorInfo.nome}
 
        const msgTextNegada = `
 ❌ *SOLICITAÇÃO NÃO AUTORIZADA - ${codigoSolicitacao}*
-Negada por: ${autorizadorInfo.nome}
+Negada por: ${utils.escapeMarkdown(autorizadorInfo.nome)}
 📋 *Resumo da solicitação:*
-- Solicitante: ${solicitacao.solicitante.nome}
-- Viatura: ${solicitacao.viatura.prefixo} - ${solicitacao.viatura.nome}`;
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}`;
 
        if (solicitacao.messageIds.autorizadores) {
            for (const msg of solicitacao.messageIds.autorizadores) {
@@ -605,15 +622,18 @@ Negada por: ${autorizadorInfo.nome}
            }
        }
        try {
-           await bot.editMessageText(`
+           await bot.editMessageText(
+               `
 ❌ *SOLICITAÇÃO NÃO AUTORIZADA - ${codigoSolicitacao}*
 📋 *Dados da solicitação:*
-- Solicitante: ${solicitacao.solicitante.nome}
-- Viatura: ${solicitacao.viatura.prefixo} - ${solicitacao.viatura.nome}
-- Autorizador: ${autorizadorInfo.nome}
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
+- Autorizador: ${utils.escapeMarkdown(autorizadorInfo.nome)}
 ❌ *Status: NÃO AUTORIZADA*
 Entre em contato com o autorizador para mais informações.
-       `, { chat_id: solicitacao.solicitante.chatId, message_id: solicitacao.messageIds.solicitante, parse_mode: 'Markdown' });
+               `,
+               { chat_id: solicitacao.solicitante.chatId, message_id: solicitacao.messageIds.solicitante, parse_mode: 'Markdown' }
+           );
        } catch(e) {
            console.error("Erro edit msg solicitante (negada):", e.message);
        }
@@ -637,10 +657,10 @@ async function notificarRadioOperadores(bot, codigoSolicitacao) {
 🔑 *ENTREGA DE CHAVES - ${codigoSolicitacao}*
 
 📋 *Resumo da solicitação *AUTORIZADA* ✅:*
-- Solicitante: ${solicitacao.solicitante.nome}
-- Viatura: ${solicitacao.viatura.prefixo} - ${solicitacao.viatura.nome}
-- Placa: ${solicitacao.viatura.placa}
-- Autorizador: ${solicitacao.autorizador.nome}
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
+- Placa: ${utils.escapeMarkdown(solicitacao.viatura.placa)}
+- Autorizador: ${utils.escapeMarkdown(solicitacao.autorizador.nome)}
 
 📋 *RECOMENDAÇÕES PARA ENTREGA:*
 - Verificar identidade do solicitante
@@ -682,11 +702,11 @@ async function processarEntregaChaves(bot, userId, codigoSolicitacao) {
 
    const msgText = `
 ✅ *CHAVES ENTREGUES - ${codigoSolicitacao}*
-Entregue por: ${radioOpInfo.nome}
+Entregue por: ${utils.escapeMarkdown(radioOpInfo.nome)}
 📋 *Resumo da solicitação:*
-- Solicitante: ${solicitacao.solicitante.nome}
-- Viatura: ${solicitacao.viatura.prefixo} - ${solicitacao.viatura.nome}
-- Rádio-operador: ${radioOpInfo.nome}
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
+- Rádio-operador: ${utils.escapeMarkdown(radioOpInfo.nome)}
 ✅ *Status: CHAVES ENTREGUES*`;
 
    if (solicitacao.messageIds.radioOperadores) {
@@ -706,21 +726,24 @@ Entregue por: ${radioOpInfo.nome}
    };
 
    try {
-       await bot.editMessageText(`
+       await bot.editMessageText(
+            `
 🎉 *CHAVES ENTREGUES - ${codigoSolicitacao}*
 📋 *Dados da solicitação:*
-- Solicitante: ${solicitacao.solicitante.nome}
-- Viatura: ${solicitacao.viatura.prefixo} - ${solicitacao.viatura.nome}
-- Rádio-operador: ${radioOpInfo.nome}
+- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
+- Rádio-operador: ${utils.escapeMarkdown(radioOpInfo.nome)}
 
 🔑 *Status: CHAVES ENTREGUES!*
 📊 **Próximo passo:** Informe a quilometragem inicial da viatura.
-       `, { 
-           chat_id: solicitacao.solicitante.chatId, 
-           message_id: solicitacao.messageIds.solicitante, 
-           parse_mode: 'Markdown',
-           reply_markup: keyboardKmInicial 
-       });
+            `,
+            {
+            chat_id: solicitacao.solicitante.chatId,
+            message_id: solicitacao.messageIds.solicitante,
+            parse_mode: 'Markdown',
+            reply_markup: keyboardKmInicial
+            }
+        );
    } catch(e) {
        console.error("Erro edit msg solicitante (entrega):", e.message);
    }
@@ -877,22 +900,22 @@ async function processarEntradaKmFinal(bot, userId, texto) {
        const dataNecessidade = new Date(dadosCompletos.data_necessidade).toLocaleString('pt-BR');
        const dataEntrega = dadosCompletos.data_entrega ? new Date(dadosCompletos.data_entrega).toLocaleString('pt-BR') : 'N/I';
 
-       await bot.editMessageText(`
-📋 *RESUMO FINAL DA SOLICITAÇÃO*
-═══════════════════════════════
+       await bot.editMessageText(
+            📋 *RESUMO FINAL DA SOLICITAÇÃO*
+            ═══════════════════════════════
 
-🆔 **Código:** ${dadosCompletos.codigo_solicitacao}
+            🆔 **Código:** ${dadosCompletos.codigo_solicitacao}
 
-👤 **PESSOAS ENVOLVIDAS:**
-- Solicitante: ${dadosCompletos.solicitante_nome}
-- Vistoriador: ${dadosCompletos.vistoriador_nome || 'N/I'}
-- Autorizador: ${dadosCompletos.autorizador_nome || 'N/I'}
-- Rádio-operador: ${radioOperadorNome}
+            👤 **PESSOAS ENVOLVIDAS:**
+            - Solicitante: ${utils.escapeMarkdown(dadosCompletos.solicitante_nome)}
+            - Vistoriador: ${utils.escapeMarkdown(dadosCompletos.vistoriador_nome || 'N/I')}
+            - Autorizador: ${utils.escapeMarkdown(dadosCompletos.autorizador_nome || 'N/I')}
+            - Rádio-operador: ${utils.escapeMarkdown(radioOperadorNome)}
 
 🚗 **VIATURA:**
-- Nome: ${dadosCompletos.viatura_nome || 'N/I'}
-- Prefixo: ${dadosCompletos.viatura_prefixo || 'N/I'}
-- Placa: ${dadosCompletos.viatura_placa || 'N/I'}
+            - Nome: ${utils.escapeMarkdown(dadosCompletos.viatura_nome || 'N/I')}
+            - Prefixo: ${utils.escapeMarkdown(dadosCompletos.viatura_prefixo || 'N/I')}
+            - Placa: ${utils.escapeMarkdown(dadosCompletos.viatura_placa || 'N/I')}
 
 📅 **DATAS E HORÁRIOS:**
 - Solicitação: ${dataSolicitacao}
@@ -905,16 +928,18 @@ async function processarEntradaKmFinal(bot, userId, texto) {
 - KM rodados: ${kmRodados.toLocaleString('pt-BR')}
 
 📝 **MOTIVO:**
-${dadosCompletos.motivo || 'N/I'}
+${utils.escapeMarkdown(dadosCompletos.motivo || 'N/I')}
 
 ═══════════════════════════════
 ✅ **SOLICITAÇÃO FINALIZADA**
 🎉 Obrigado por utilizar o sistema!
-       `, { 
-           chat_id: sessao.chatId, 
-           message_id: solicitacao.messageIds.solicitante, 
-           parse_mode: 'Markdown' 
-       });
+            `,
+            {
+            chat_id: sessao.chatId,
+            message_id: solicitacao.messageIds.solicitante,
+            parse_mode: 'Markdown'
+            }
+        );
 
        await stateManager.deleteSession(userId);
        return true;

@@ -18,7 +18,7 @@ async function processarCadastroViatura(bot, userId) {
     try {
         const prefixoExists = await db.checkPrefixoExistsDB(viatura.prefixo);
         if (prefixoExists) {
-            bot.sendMessage(sessao.chatId, `❌ *ERRO: Prefixo ${viatura.prefixo} já existe!*\n\nTente novamente com outro prefixo. Use /addviatura para recomeçar.`, { parse_mode: 'Markdown' });
+            bot.sendMessage(sessao.chatId, `❌ *ERRO: Prefixo ${utils.escapeMarkdown(viatura.prefixo)} já existe!*\n\nTente novamente com outro prefixo. Use /addviatura para recomeçar.`, { parse_mode: 'Markdown' });
             await stateManager.deleteSession(userId);
             return;
         }
@@ -29,10 +29,10 @@ async function processarCadastroViatura(bot, userId) {
 ✅ *VIATURA CADASTRADA COM SUCESSO!*
 
 📋 *Dados cadastrados:*
-- Prefixo: ${viatura.prefixo}
-- Nome: ${viatura.nome}
-- Modelo: ${viatura.modelo}
-- Placa: ${viatura.placa}
+- Prefixo: ${utils.escapeMarkdown(viatura.prefixo)}
+- Nome: ${utils.escapeMarkdown(viatura.nome)}
+- Modelo: ${utils.escapeMarkdown(viatura.modelo)}
+- Placa: ${utils.escapeMarkdown(viatura.placa)}
 - KM Atual: ${parseInt(viatura.km).toLocaleString('pt-BR')}
 - Status: ${STATUS_VIATURAS[viatura.status]}
 
@@ -60,7 +60,7 @@ async function processarEntradaPrefixoViatura(bot, userId, texto) {
     sessao.etapa = 'aguardando_nome_viatura';
     await stateManager.setSession(userId, sessao);
     
-    bot.sendMessage(sessao.chatId, `✅ *Prefixo salvo:* ${sessao.novaViatura.prefixo}\n\n📝 *Etapa 2/6: NOME*\n\nDigite o nome/descrição da viatura (ex: Viatura 006 - Patrulha):`, { parse_mode: 'Markdown' });
+    bot.sendMessage(sessao.chatId, `✅ *Prefixo salvo:* ${utils.escapeMarkdown(sessao.novaViatura.prefixo)}\n\n📝 *Etapa 2/6: NOME*\n\nDigite o nome/descrição da viatura (ex: Viatura 006 - Patrulha):`, { parse_mode: 'Markdown' });
     return true;
 }
 
@@ -77,7 +77,7 @@ async function processarEntradaNomeViatura(bot, userId, texto) {
     sessao.etapa = 'aguardando_modelo';
     await stateManager.setSession(userId, sessao);
     
-    bot.sendMessage(sessao.chatId, `✅ *Nome salvo:* ${sessao.novaViatura.nome}\n\n📝 *Etapa 3/6: MODELO*\n\nDigite o modelo da viatura (ex: Ford Ka Sedan, Chevrolet Onix):`, { parse_mode: 'Markdown' });
+    bot.sendMessage(sessao.chatId, `✅ *Nome salvo:* ${utils.escapeMarkdown(sessao.novaViatura.nome)}\n\n📝 *Etapa 3/6: MODELO*\n\nDigite o modelo da viatura (ex: Ford Ka Sedan, Chevrolet Onix):`, { parse_mode: 'Markdown' });
     return true;
 }
 
@@ -94,7 +94,7 @@ async function processarEntradaModeloViatura(bot, userId, texto) {
     sessao.etapa = 'aguardando_placa';
     await stateManager.setSession(userId, sessao);
     
-    bot.sendMessage(sessao.chatId, `✅ *Modelo salvo:* ${sessao.novaViatura.modelo}\n\n📝 *Etapa 4/6: PLACA*\n\nDigite a placa da viatura (ex: ABC-1234):`, { parse_mode: 'Markdown' });
+    bot.sendMessage(sessao.chatId, `✅ *Modelo salvo:* ${utils.escapeMarkdown(sessao.novaViatura.modelo)}\n\n📝 *Etapa 4/6: PLACA*\n\nDigite a placa da viatura (ex: ABC-1234):`, { parse_mode: 'Markdown' });
     return true;
 }
 
@@ -117,7 +117,7 @@ async function processarEntradaPlacaViatura(bot, userId, texto) {
     sessao.etapa = 'aguardando_km';
     await stateManager.setSession(userId, sessao);
     
-    bot.sendMessage(sessao.chatId, `✅ *Placa salva:* ${placa}\n\n📝 *Etapa 5/6: QUILOMETRAGEM*\n\nDigite a quilometragem atual da viatura (apenas números):`, { parse_mode: 'Markdown' });
+    bot.sendMessage(sessao.chatId, `✅ *Placa salva:* ${utils.escapeMarkdown(placa)}\n\n📝 *Etapa 5/6: QUILOMETRAGEM*\n\nDigite a quilometragem atual da viatura (apenas números):`, { parse_mode: 'Markdown' });
     return true;
 }
 

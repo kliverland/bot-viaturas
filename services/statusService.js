@@ -1,9 +1,8 @@
 // services/statusService.js
 const db = require('../db');
 const { STATUS_VIATURAS } = require('../config');
-const { formatarDataHora } = require('../utils');
+const { formatarDataHora, escapeMarkdown, temPermissao } = require('../utils');
 const authService = require('./authService'); // ← MOVIDO PARA O TOPO
-const { temPermissao } = require('../utils');
 const CHUNK_SIZE = 5; // Quantidade de botões por linha no teclado inline
 
 async function listarViaturasParaAtualizacao(bot, chatId, userId) {
@@ -19,7 +18,7 @@ async function listarViaturasParaAtualizacao(bot, chatId, userId) {
         mensagem += '*Selecione a viatura que deseja atualizar:*\n\n';
         
         rows.forEach((viatura, index) => {
-            mensagem += `${index + 1}. ${STATUS_VIATURAS[viatura.status] || '⚪ Status Desconhecido'} *${viatura.prefixo}* - ${viatura.nome}\n`;
+            mensagem += `${index + 1}. ${STATUS_VIATURAS[viatura.status] || '⚪ Status Desconhecido'} *${escapeMarkdown(viatura.prefixo)}* - ${escapeMarkdown(viatura.nome)}\n`;
         });
         
         const keyboard = {
@@ -147,13 +146,14 @@ async function alterarStatusViatura(bot, callbackQuery, viaturaId, novoStatus) {
             return;
         }
         
-        bot.editMessageText(`✅ *STATUS ALTERADO COM SUCESSO!*
+        bot.editMessageText(
+        `✅ *STATUS ALTERADO COM SUCESSO!*
 
-*Viatura:* ${viatura.prefixo} - ${viatura.nome}
+*Viatura:* ${escapeMarkdown(viatura.prefixo)} - ${escapeMarkdown(viatura.nome)}
 *Status anterior:* ${STATUS_VIATURAS[statusAnterior]}
 *Novo status:* ${STATUS_VIATURAS[novoStatus]}
 
-*Alterado por:* ${usuario.nome}
+*Alterado por:* ${escapeMarkdown(usuario.nome)}
 *Data/Hora:* ${formatarDataHora()}
 
 A viatura agora está ${STATUS_VIATURAS[novoStatus].toLowerCase()}.

@@ -1,6 +1,6 @@
 // services/authService.js
 const db = require('../db');
-const { temPermissao } = require('../utils');
+const { temPermissao, escapeMarkdown } = require('../utils');
 const stateManager = require('../stateManager');
 const { TIPOS_USUARIO_CADASTRO } = require('../config');
 
@@ -135,14 +135,18 @@ async function finalizarCadastro(bot, userId, nome) {
                 if (tipoCustom) tipoLabel = tipoCustom.label;
             }
 
-            bot.sendMessage(sessao.chatId, `
+            bot.sendMessage(
+                sessao.chatId,
+                `
 🎉 *CADASTRO CONCLUÍDO COM SUCESSO!*
 
-Bem-vindo, ${nome}!
-✅ Seu acesso foi liberado como ${tipoLabel}.
+Bem-vindo, ${escapeMarkdown(nome)}!
+✅ Seu acesso foi liberado como ${escapeMarkdown(tipoLabel)}.
 ✅ Agora você pode usar todos os comandos do bot.
 Digite /help para ver os comandos disponíveis.
-    `, { parse_mode: 'Markdown' });
+                `,
+                { parse_mode: 'Markdown' }
+            );
         } else {
             bot.sendMessage(sessao.chatId, '❌ Erro ao finalizar cadastro. Tente novamente.');
         }
@@ -179,7 +183,7 @@ async function processarEntradaCpfPreCadastro(bot, userIdVistoriador, textoCpf) 
 
     const check = await db.checkUsuarioExistsDB(cpfLimpo, null);
     if (check.exists && check.byCpf) {
-        bot.sendMessage(sessao.chatId, `❌ *ERRO: CPF ${cpfLimpo} já cadastrado no sistema.* Tente novamente com outro CPF ou verifique os dados.`, { parse_mode: 'Markdown' });
+        bot.sendMessage(sessao.chatId, `❌ *ERRO: CPF ${escapeMarkdown(cpfLimpo)} já cadastrado no sistema.* Tente novamente com outro CPF ou verifique os dados.`, { parse_mode: 'Markdown' });
         await stateManager.deleteSession(userIdVistoriador);
         return true;
     }
@@ -188,7 +192,7 @@ async function processarEntradaCpfPreCadastro(bot, userIdVistoriador, textoCpf) 
     sessao.etapa = 'precad_aguardando_matricula';
     await stateManager.setSession(userIdVistoriador, sessao);
 
-    bot.sendMessage(sessao.chatId, `✅ *CPF ${cpfLimpo} válido.*\n\n📋 *Etapa 2/3: MATRÍCULA do Novo Usuário*\nDigite a matrícula do novo usuário (apenas números):`, { parse_mode: 'Markdown' });
+    bot.sendMessage(sessao.chatId, `✅ *CPF ${escapeMarkdown(cpfLimpo)} válido.*\n\n📋 *Etapa 2/3: MATRÍCULA do Novo Usuário*\nDigite a matrícula do novo usuário (apenas números):`, { parse_mode: 'Markdown' });
     return true;
 }
 
@@ -204,7 +208,7 @@ async function processarEntradaMatriculaPreCadastro(bot, userIdVistoriador, text
 
     const check = await db.checkUsuarioExistsDB(null, matriculaLimpa);
     if (check.exists && check.byMatricula) {
-        bot.sendMessage(sessao.chatId, `❌ *ERRO: Matrícula ${matriculaLimpa} já cadastrada no sistema.* Tente novamente com outra matrícula ou verifique os dados.`, { parse_mode: 'Markdown' });
+        bot.sendMessage(sessao.chatId, `❌ *ERRO: Matrícula ${escapeMarkdown(matriculaLimpa)} já cadastrada no sistema.* Tente novamente com outra matrícula ou verifique os dados.`, { parse_mode: 'Markdown' });
         await stateManager.deleteSession(userIdVistoriador);
         return true;
     }
@@ -219,7 +223,7 @@ async function processarEntradaMatriculaPreCadastro(bot, userIdVistoriador, text
         ]))
     };
 
-    bot.sendMessage(sessao.chatId, `✅ *Matrícula ${matriculaLimpa} válida.*\n\n📋 *Etapa 3/3: TIPO do Novo Usuário*\nSelecione o tipo para o novo usuário:`, {
+    bot.sendMessage(sessao.chatId, `✅ *Matrícula ${escapeMarkdown(matriculaLimpa)} válida.*\n\n📋 *Etapa 3/3: TIPO do Novo Usuário*\nSelecione o tipo para o novo usuário:`, {
         parse_mode: 'Markdown',
         reply_markup: keyboardTipos
     });

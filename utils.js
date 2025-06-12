@@ -32,8 +32,14 @@ function temPermissao(tipoUsuario, tipoRequerido) {
     return NIVEIS_PERMISSAO[tipoUsuario] >= NIVEIS_PERMISSAO[tipoRequerido];
 }
 
+function escapeMarkdown(texto) {
+    if (!texto) return '';
+    return texto.replace(/([_*`\[\]()])/g, '\\$1');
+}
+
 module.exports = {
     formatarDataHora,
     validarAntecedencia,
-    temPermissao
+    temPermissao,
+    escapeMarkdown
 };
