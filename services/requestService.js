@@ -418,6 +418,8 @@ Sendo atendida por: ${utils.escapeMarkdown(solicitacao.vistoriador.nome)}
     return null;
 }
 
+// Cole este código no arquivo 'services/requestService.js', substituindo a função existente.
+
 async function handleSelecionarViatura(bot, callbackQuery, codigoSolicitacao, viaturaId) {
     const userId = callbackQuery.from.id;
     const solicitacao = stateManager.getRequest(codigoSolicitacao);
@@ -459,16 +461,22 @@ async function handleSelecionarViatura(bot, callbackQuery, codigoSolicitacao, vi
             return;
         }
 
+        // 1. Atualiza o status da viatura para 'reservada' dentro da transação
         await connection.execute('UPDATE viaturas SET status = "reservada" WHERE id = ?', [viaturaId]);
 
+        // 2. Atualiza o log da solicitação, passando a conexão da transação
         await db.atualizarStatusSolicitacaoDB(codigoSolicitacao, 'aguardando_autorizacao', {
             viatura_prefixo: viaturaSelecionada.prefixo,
             viatura_nome: viaturaSelecionada.nome,
-            viatura_placa: viaturaSelecionada.placa
-        });
+            viatura_placa: viaturaSelecionada.placa,
+            viatura_id: viaturaSelecionada.id
+        }, connection); // <-- A conexão é passada aqui
 
+        // 3. Comita a transação somente após as duas atualizações serem bem-sucedidas
         await connection.commit();
 
+        // A partir daqui, com os dados já salvos no DB, atualiza o estado em memória e notifica os usuários
+        
         solicitacao.status = 'aguardando_autorizacao';
         solicitacao.viatura = {
             id: viaturaId,
