@@ -49,9 +49,37 @@ async function checkUsuarioExistsDB(cpf, matricula) {
 async function getSessionFromDB(userId) {
     try {
         const [rows] = await pool.execute('SELECT session_data FROM user_sessions WHERE telegram_id = ?', [userId]);
-        return rows.length > 0 ? JSON.parse(rows[0].session_data) : null;
+        
+        if (rows.length === 0) {
+            return null; // Nenhuma sessão encontrada
+        }
+
+        const sessionData = rows[0].session_data;
+
+        // VERIFICAÇÃO PRINCIPAL:
+        // Se o driver do banco de dados já converteu o campo JSON em um objeto,
+        // o retornamos diretamente, sem tentar fazer o parse novamente.
+        if (typeof sessionData === 'object' && sessionData !== null) {
+            return sessionData;
+        }
+
+        // Se, por algum motivo, o dado vier como texto (ex: coluna tipo TEXT),
+        // tentamos fazer o parse para manter a compatibilidade.
+        if (typeof sessionData === 'string') {
+            // Se a string for "[object Object]", é um sinal de erro na gravação. Retorna null.
+            if (sessionData === '[object Object]') {
+                console.warn(`Sessão inválida (dado como '[object Object]') para o usuário ${userId}. Removendo.`);
+                await deleteSessionFromDB(userId);
+                return null;
+            }
+            return JSON.parse(sessionData);
+        }
+
+        // Se não for nem objeto nem string, é um dado inesperado.
+        return null;
+
     } catch (error) {
-        console.error('Erro em getSessionFromDB:', error);
+        console.error(`Erro crítico em getSessionFromDB para o usuário ${userId}:`, error);
         throw error;
     }
 }
