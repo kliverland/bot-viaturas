@@ -2,6 +2,7 @@
 const db = require('../db');
 const { STATUS_VIATURAS } = require('../config');
 const stateManager = require('../stateManager');
+const { escapeMarkdown } = require('../utils');
 
 async function processarCadastroViatura(bot, userId) {
     const sessao = await stateManager.getSession(userId);
