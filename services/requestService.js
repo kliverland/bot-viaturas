@@ -1,8 +1,46 @@
 // services/requestService.js
 const db = require('../db');
-const utils = require('../utils');
+const { formatarDataHora, validarAntecedencia, escapeMarkdown } = require('../utils');
 const authService = require('./authService');
 const stateManager = require('../stateManager');
+
+function processarHora(input) {
+    if (!input) return null;
+    const textoLimpo = input.trim();
+    
+    // Tenta reconhecer o formato: 10:30
+    const regexHoraMinuto = /^(\d{1,2}):(\d{2})$/;
+    let match = textoLimpo.match(regexHoraMinuto);
+    if (match) {
+        return { hora: parseInt(match[1]), minuto: parseInt(match[2]) };
+    }
+    
+    // Tenta reconhecer o formato: 10h30
+    const regexHora = /^(\d{1,2})h(\d{2})$/i;
+    match = textoLimpo.match(regexHora);
+    if (match) {
+        return { hora: parseInt(match[1]), minuto: parseInt(match[2]) };
+    }
+    
+    // Tenta reconhecer o formato: 1030 ou 930
+    const regexInteiro = /^(\d{3,4})$/;
+    match = textoLimpo.match(regexInteiro);
+    if (match) {
+        const numero = match[1];
+        let hora, minuto;
+        
+        if (numero.length === 3) { // Formato "930"
+            hora = parseInt(numero.substring(0, 1));
+            minuto = parseInt(numero.substring(1, 3));
+        } else { // Formato "1030"
+            hora = parseInt(numero.substring(0, 2));
+            minuto = parseInt(numero.substring(2, 4));
+        }
+        return { hora, minuto };
+    }
+    
+    return null; // Retorna nulo se nenhum formato for compatível
+}
 
 async function solicitarData(bot, userId) {
     const sessao = await stateManager.getSession(userId);
@@ -81,18 +119,18 @@ async function processarEntradaHoraSolicitacao(bot, msg) {
 
     try { await bot.deleteMessage(msg.chat.id, msg.message_id); } catch (e) {}
 
-    // ... (lógica de validação de hora do arquivo original) ...
-    // Supondo que a função interna 'processarHora' existe
-    const resultado = processarHora(msg.text); 
+    const resultado = processarHora(msg.text); // ✅ Esta chamada agora é válida
+    
     if (!resultado || resultado.hora > 23 || resultado.minuto > 59) {
-        bot.sendMessage(sessao.chatId, `❌ Formato de hora inválido. Use HH:MM ou HHMM.`).then(m => setTimeout(() => bot.deleteMessage(m.chat.id, m.message_id), 4000));
+        bot.sendMessage(sessao.chatId, `❌ Formato de hora inválido. Use HH:MM, HHhMM ou HHMM.`).then(m => setTimeout(() => bot.deleteMessage(m.chat.id, m.message_id), 4000));
         return true;
     }
     
     const horaFormatada = `${String(resultado.hora).padStart(2, '0')}:${String(resultado.minuto).padStart(2, '0')}`;
     sessao.hora = horaFormatada;
     await stateManager.setSession(userId, sessao);
-    await solicitarMotivo(bot, userId); // Avança para a próxima etapa
+    
+    await solicitarMotivo(bot, userId); // Avança para a próxima etapa de pedir o motivo
     return true;
 }
 
@@ -245,7 +283,7 @@ async function solicitarMotivo(bot, userId) {
     );
 }
 
-async function processarEntradaDataSolicitacao(bot, userId, texto) {
+async function processarEntradaDataSolicitacao(bot, msg) {
     const sessao = await stateManager.getSession(userId);
     if (!sessao || sessao.etapa !== 'aguardando_data') return false;
 
@@ -272,35 +310,34 @@ async function processarEntradaDataSolicitacao(bot, userId, texto) {
     return true;
 }
 
-async function processarEntradaHoraSolicitacao(bot, userId, texto) {
+async function processarEntradaHoraSolicitacao(bot, msg) {
+    const userId = msg.from.id;
     const sessao = await stateManager.getSession(userId);
     if (!sessao || sessao.etapa !== 'aguardando_hora') return false;
 
+    // ========================================================================
+    // >>> CORREÇÃO: A função auxiliar 'processarHora' é definida aqui dentro <<<
+    // Isso garante que ela sempre exista no escopo correto.
     function processarHora(input) {
+        if (!input) return null;
         const textoLimpo = input.trim();
         
+        // Formato: 10:30
         const regexHoraMinuto = /^(\d{1,2}):(\d{2})$/;
         let match = textoLimpo.match(regexHoraMinuto);
-        if (match) {
-            const hora = parseInt(match[1]);
-            const minuto = parseInt(match[2]);
-            return { hora, minuto, formato: 'HH:MM' };
-        }
+        if (match) return { hora: parseInt(match[1]), minuto: parseInt(match[2]) };
         
+        // Formato: 10h30
         const regexHora = /^(\d{1,2})h(\d{2})$/i;
         match = textoLimpo.match(regexHora);
-        if (match) {
-            const hora = parseInt(match[1]);
-            const minuto = parseInt(match[2]);
-            return { hora, minuto, formato: 'HHhMM' };
-        }
+        if (match) return { hora: parseInt(match[1]), minuto: parseInt(match[2]) };
         
+        // Formato: 1030 ou 930
         const regexInteiro = /^(\d{3,4})$/;
         match = textoLimpo.match(regexInteiro);
         if (match) {
             const numero = match[1];
             let hora, minuto;
-            
             if (numero.length === 3) {
                 hora = parseInt(numero.substring(0, 1));
                 minuto = parseInt(numero.substring(1, 3));
@@ -308,63 +345,64 @@ async function processarEntradaHoraSolicitacao(bot, userId, texto) {
                 hora = parseInt(numero.substring(0, 2));
                 minuto = parseInt(numero.substring(2, 4));
             }
-            return { hora, minuto, formato: 'HHMM' };
+            return { hora, minuto };
         }
-        
         return null;
     }
+    // ========================================================================
 
-    const resultado = processarHora(texto);
+    // Tenta apagar a mensagem do usuário para limpar o chat
+    try { await bot.deleteMessage(msg.chat.id, msg.message_id); } catch (e) {}
+
+    // Agora, a chamada para 'processarHora' funcionará sem erros
+    const resultado = processarHora(msg.text); 
     
-    if (!resultado) {
-        bot.sendMessage(sessao.chatId, `❌ *FORMATO INVÁLIDO*
-
-Formatos aceitos:
-- **10:00** (hora:minuto)
-- **10h00** (hora h minuto)
-- **1000** (número de 4 dígitos)
-
-Digite novamente:`, { parse_mode: 'Markdown' });
+    if (!resultado || resultado.hora > 23 || resultado.minuto > 59) {
+        bot.sendMessage(sessao.chatId, `❌ Formato de hora inválido. Use HH:MM, HHhMM ou HHMM.`).then(m => setTimeout(() => bot.deleteMessage(m.chat.id, m.message_id), 4000));
         return true;
     }
-
-    const { hora, minuto } = resultado;
     
-    if (hora > 23 || minuto > 59) {
-        bot.sendMessage(sessao.chatId, `❌ *HORA INVÁLIDA*
-
-Hora deve ser entre 00:00 e 23:59
-**Você digitou:** ${hora}:${String(minuto).padStart(2, '0')}
-
-Digite novamente:`, { parse_mode: 'Markdown' });
-        return true;
-    }
-
-    const horaFormatada = `${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`;
-    
+    const horaFormatada = `${String(resultado.hora).padStart(2, '0')}:${String(resultado.minuto).padStart(2, '0')}`;
     sessao.hora = horaFormatada;
     await stateManager.setSession(userId, sessao);
-    bot.sendMessage(sessao.chatId, `✅ *Hora salva:* ${horaFormatada}`, { parse_mode: 'Markdown' });
-    solicitarMotivo(bot, sessao.chatId, userId);
+    
+    // Avança para a próxima etapa
+    await solicitarMotivo(bot, userId);
     return true;
 }
 
-async function processarEntradaMotivoSolicitacao(bot, userId, texto) {
+async function processarEntradaMotivoSolicitacao(bot, msg) {
+    // 1. A assinatura foi corrigida para (bot, msg).
+    // Agora extraímos as informações de dentro do objeto 'msg'.
+    const userId = msg.from.id;
+    const texto = msg.text;
     const sessao = await stateManager.getSession(userId);
+
     if (!sessao || sessao.etapa !== 'aguardando_motivo') return false;
 
-    if (!texto || texto.trim().length < 5) {
-        bot.sendMessage(sessao.chatId, `❌ *MOTIVO MUITO CURTO*\nPor favor, descreva com mais detalhes o motivo da solicitação.\nMínimo de 5 caracteres.\n\nDigite novamente:`, { parse_mode: 'Markdown' });
-        return true;
+    // 2. Apagamos a mensagem do usuário para manter o chat limpo.
+    try {
+        await bot.deleteMessage(msg.chat.id, msg.message_id);
+    } catch (e) {
+        // Ignora o erro caso a mensagem já tenha sido apagada.
     }
+
+    // 3. A lógica de validação continua a mesma.
+    if (!texto || texto.trim().length < 5) {
+        // Envia uma mensagem de erro temporária que se apaga sozinha.
+        bot.sendMessage(sessao.chatId, `❌ *MOTIVO MUITO CURTO*\nPor favor, descreva com mais detalhes (mínimo de 5 caracteres).`, { parse_mode: 'Markdown' })
+           .then(m => setTimeout(() => bot.deleteMessage(m.chat.id, m.message_id), 4000));
+        return true; // Permanece na mesma etapa, aguardando nova entrada.
+    }
+
+    // 4. Atualizamos a sessão com o motivo informado.
     sessao.motivo = texto.trim();
     await stateManager.setSession(userId, sessao);
-    bot.sendMessage(
-        sessao.chatId,
-        `✅ *Motivo salvo:* ${utils.escapeMarkdown(sessao.motivo)}`,
-        { parse_mode: 'Markdown' }
-    );
+
+    // 5. Removemos a mensagem de confirmação "Motivo salvo".
+    // Em vez disso, chamamos diretamente a próxima grande etapa do fluxo.
     await processarSolicitacaoFinal(bot, userId);
+    
     return true;
 }
 
@@ -385,7 +423,7 @@ async function processarSolicitacaoFinal(bot, userId) {
     const dataHoraNecessidadeMySQL = `${ano}-${mes}-${dia} ${hora}:${minuto}:00`;
     const dataHoraNecessidadeDisplay = `${dataInput} ${horaInput}`;
 
-    if (!utils.validarAntecedencia(dataHoraNecessidadeDisplay)) {
+    if (!validarAntecedencia(dataHoraNecessidadeDisplay)) {
         const necessidadeDate = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia), parseInt(hora), parseInt(minuto));
         const agora = new Date();
         const diferencaMinutos = Math.round((necessidadeDate - agora) / (1000 * 60));
@@ -395,7 +433,7 @@ async function processarSolicitacaoFinal(bot, userId) {
 ❌ *ANTECEDÊNCIA INSUFICIENTE*
 
 Solicitações devem ser feitas com pelo menos ${antecedenciaMinima} minutos de antecedência.
-- Data/Hora atual: ${utils.formatarDataHora()}
+- Data/Hora atual: ${formatarDataHora()}
 - Data/Hora solicitada: ${dataHoraNecessidadeDisplay}
 - Diferença: ${diferencaMinutos} minutos
 
@@ -412,7 +450,7 @@ Por favor, escolha um horário com mais antecedência.
     const solicitacao = {
         codigo: idSolicitacao,
         solicitante: { id: userId, nome: sessao.nomeUsuario, chatId: sessao.chatId },
-        dataHoraSolicitacao: utils.formatarDataHora(),
+        dataHoraSolicitacao: formatarDataHora(),
         dataHoraNecessidade: dataHoraNecessidadeMySQL,
         dataHoraNecessidadeDisplay: dataHoraNecessidadeDisplay,
         motivo: sessao.motivo,
@@ -430,9 +468,9 @@ Por favor, escolha um horário com mais antecedência.
 🟡 *SOLICITAÇÃO ENVIADA - ${idSolicitacao}*
 
 📋 *Dados da solicitação:*
-- Solicitante: ${utils.escapeMarkdown(sessao.nomeUsuario)}
+- Solicitante: ${escapeMarkdown(sessao.nomeUsuario)}
 - Data/Hora necessidade: ${dataHoraNecessidadeDisplay}
-- Motivo: ${utils.escapeMarkdown(sessao.motivo)}
+- Motivo: ${escapeMarkdown(sessao.motivo)}
 
 ⏳ *Status: Aguardando vistoriador...*
 Você será notificado sobre o andamento.
@@ -466,9 +504,9 @@ async function notificarVistoriadores(bot, codigoSolicitacao) {
 🔍 *NOVA SOLICITAÇÃO - ${codigoSolicitacao}*
 
 📋 *Detalhes:*
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}
+- Motivo: ${escapeMarkdown(solicitacao.motivo)}
 
 ⏰ Clique em ATENDER para responder esta solicitação.
     `;
@@ -502,9 +540,9 @@ async function renotificarVistoriadores(bot, codigoSolicitacao) {
 ⚠️ *SOLICITAÇÃO PENDENTE - ${codigoSolicitacao}*
 
 Esta solicitação ainda aguarda vistoriador há mais de 3 minutos.
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}
+- Motivo: ${escapeMarkdown(solicitacao.motivo)}
     `;
     const vistoriadores = await db.getUsuariosPorTipoDB('vistoriador');
     for (const vistoriador of vistoriadores) {
@@ -550,12 +588,12 @@ async function processarRespostaVistoriador(bot, userId, codigoSolicitacao) {
                         `
 ✅ *SOLICITAÇÃO ATENDIDA - ${codigoSolicitacao}*
 
-Sendo atendida por: ${utils.escapeMarkdown(solicitacao.vistoriador.nome)}
+Sendo atendida por: ${escapeMarkdown(solicitacao.vistoriador.nome)}
 
 📋 *Detalhes:*
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}
+- Motivo: ${escapeMarkdown(solicitacao.motivo)}
                         `,
                         { chat_id: msg.chatId, message_id: msg.messageId, parse_mode: 'Markdown' }
                     );
@@ -572,11 +610,11 @@ Sendo atendida por: ${utils.escapeMarkdown(solicitacao.vistoriador.nome)}
 🟠 *SOLICITAÇÃO EM ANÁLISE - ${codigoSolicitacao}*
 
 📋 *Dados da solicitação:*
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}
+- Motivo: ${escapeMarkdown(solicitacao.motivo)}
 
-🔍 *Status: Em análise - Vistoriador: ${utils.escapeMarkdown(solicitacao.vistoriador.nome)}*
+🔍 *Status: Em análise - Vistoriador: ${escapeMarkdown(solicitacao.vistoriador.nome)}*
             `,
             { chat_id: solicitacao.solicitante.chatId, message_id: solicitacao.messageIds.solicitante, parse_mode: 'Markdown' }
         );
@@ -654,13 +692,13 @@ async function handleSelecionarViatura(bot, callbackQuery, codigoSolicitacao, vi
         };
         stateManager.setRequest(codigoSolicitacao, solicitacao);
 
-        await bot.editMessageText(`📋 *VIATURA SELECIONADA - ${codigoSolicitacao}*\n\n✅ Viatura: ${utils.escapeMarkdown(viaturaSelecionada.prefixo)} - ${utils.escapeMarkdown(viaturaSelecionada.nome)}\n\nA solicitação foi enviada para autorização.`, {
+        await bot.editMessageText(`📋 *VIATURA SELECIONADA - ${codigoSolicitacao}*\n\n✅ Viatura: ${escapeMarkdown(viaturaSelecionada.prefixo)} - ${escapeMarkdown(viaturaSelecionada.nome)}\n\nA solicitação foi enviada para autorização.`, {
             chat_id: callbackQuery.message.chat.id,
             message_id: callbackQuery.message.message_id,
             parse_mode: 'Markdown'
         });
 
-        await bot.editMessageText(`🔵 *SOLICITAÇÃO AGUARDANDO AUTORIZAÇÃO - ${codigoSolicitacao}*\n\n📋 *Dados da solicitação:*\n• Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}\n• Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}\n• Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}\n• Vistoriador: ${utils.escapeMarkdown(solicitacao.vistoriador.nome)}\n• Viatura: ${utils.escapeMarkdown(viaturaSelecionada.prefixo)} - ${utils.escapeMarkdown(viaturaSelecionada.nome)}\n\n🔵 *Status: Aguardando autorização...*`, {
+        await bot.editMessageText(`🔵 *SOLICITAÇÃO AGUARDANDO AUTORIZAÇÃO - ${codigoSolicitacao}*\n\n📋 *Dados da solicitação:*\n• Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}\n• Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}\n• Motivo: ${escapeMarkdown(solicitacao.motivo)}\n• Vistoriador: ${escapeMarkdown(solicitacao.vistoriador.nome)}\n• Viatura: ${escapeMarkdown(viaturaSelecionada.prefixo)} - ${escapeMarkdown(viaturaSelecionada.nome)}\n\n🔵 *Status: Aguardando autorização...*`, {
             chat_id: solicitacao.solicitante.chatId,
             message_id: solicitacao.messageIds.solicitante,
             parse_mode: 'Markdown'
@@ -696,12 +734,12 @@ async function notificarAutorizadores(bot, codigoSolicitacao) {
 🔐 *SOLICITAÇÃO PARA AUTORIZAÇÃO - ${codigoSolicitacao}*
 
 📋 *Resumo da solicitação:*
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Motivo: ${utils.escapeMarkdown(solicitacao.motivo)}
-- Vistoriador: ${utils.escapeMarkdown(solicitacao.vistoriador.nome)}
-- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
-- Placa: ${utils.escapeMarkdown(solicitacao.viatura.placa)}
+- Motivo: ${escapeMarkdown(solicitacao.motivo)}
+- Vistoriador: ${escapeMarkdown(solicitacao.vistoriador.nome)}
+- Viatura: ${escapeMarkdown(solicitacao.viatura.prefixo)} - ${escapeMarkdown(solicitacao.viatura.nome)}
+- Placa: ${escapeMarkdown(solicitacao.viatura.placa)}
 
 Você autoriza esta solicitação?
     `;
@@ -736,11 +774,11 @@ async function processarAutorizacao(bot, userId, codigoSolicitacao, autorizado) 
 
         const msgText = `
 ✅ *SOLICITAÇÃO AUTORIZADA - ${codigoSolicitacao}*
-Autorizada por: ${utils.escapeMarkdown(autorizadorInfo.nome)}
+Autorizada por: ${escapeMarkdown(autorizadorInfo.nome)}
 📋 *Resumo da solicitação:*
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}`;
+- Viatura: ${escapeMarkdown(solicitacao.viatura.prefixo)} - ${escapeMarkdown(solicitacao.viatura.nome)}`;
 
         if (solicitacao.messageIds.autorizadores) {
             for (const msg of solicitacao.messageIds.autorizadores) {
@@ -756,10 +794,10 @@ Autorizada por: ${utils.escapeMarkdown(autorizadorInfo.nome)}
             `
 ✅ *SOLICITAÇÃO AUTORIZADA - ${codigoSolicitacao}*
 📋 *Dados da solicitação:*
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
 - Data/Hora necessidade: ${solicitacao.dataHoraNecessidadeDisplay || solicitacao.dataHoraNecessidade}
-- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
-- Autorizador: ${utils.escapeMarkdown(autorizadorInfo.nome)}
+- Viatura: ${escapeMarkdown(solicitacao.viatura.prefixo)} - ${escapeMarkdown(solicitacao.viatura.nome)}
+- Autorizador: ${escapeMarkdown(autorizadorInfo.nome)}
 🎉 *Status: AUTORIZADA! Aguardando entrega das chaves...*
             `,
             { chat_id: solicitacao.solicitante.chatId, message_id: solicitacao.messageIds.solicitante, parse_mode: 'Markdown' }
@@ -783,10 +821,10 @@ Autorizada por: ${utils.escapeMarkdown(autorizadorInfo.nome)}
 
        const msgTextNegada = `
 ❌ *SOLICITAÇÃO NÃO AUTORIZADA - ${codigoSolicitacao}*
-Negada por: ${utils.escapeMarkdown(autorizadorInfo.nome)}
+Negada por: ${escapeMarkdown(autorizadorInfo.nome)}
 📋 *Resumo da solicitação:*
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
-- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}`;
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
+- Viatura: ${escapeMarkdown(solicitacao.viatura.prefixo)} - ${escapeMarkdown(solicitacao.viatura.nome)}`;
 
        if (solicitacao.messageIds.autorizadores) {
            for (const msg of solicitacao.messageIds.autorizadores) {
@@ -802,9 +840,9 @@ Negada por: ${utils.escapeMarkdown(autorizadorInfo.nome)}
                `
 ❌ *SOLICITAÇÃO NÃO AUTORIZADA - ${codigoSolicitacao}*
 📋 *Dados da solicitação:*
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
-- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
-- Autorizador: ${utils.escapeMarkdown(autorizadorInfo.nome)}
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
+- Viatura: ${escapeMarkdown(solicitacao.viatura.prefixo)} - ${escapeMarkdown(solicitacao.viatura.nome)}
+- Autorizador: ${escapeMarkdown(autorizadorInfo.nome)}
 ❌ *Status: NÃO AUTORIZADA*
 Entre em contato com o autorizador para mais informações.
                `,
@@ -833,10 +871,10 @@ async function notificarRadioOperadores(bot, codigoSolicitacao) {
 🔑 *ENTREGA DE CHAVES - ${codigoSolicitacao}*
 
 📋 *Resumo da solicitação *AUTORIZADA* ✅:*
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
-- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
-- Placa: ${utils.escapeMarkdown(solicitacao.viatura.placa)}
-- Autorizador: ${utils.escapeMarkdown(solicitacao.autorizador.nome)}
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
+- Viatura: ${escapeMarkdown(solicitacao.viatura.prefixo)} - ${escapeMarkdown(solicitacao.viatura.nome)}
+- Placa: ${escapeMarkdown(solicitacao.viatura.placa)}
+- Autorizador: ${escapeMarkdown(solicitacao.autorizador.nome)}
 
 📋 *RECOMENDAÇÕES PARA ENTREGA:*
 - Verificar identidade do solicitante
@@ -878,11 +916,11 @@ async function processarEntregaChaves(bot, userId, codigoSolicitacao) {
 
    const msgText = `
 ✅ *CHAVES ENTREGUES - ${codigoSolicitacao}*
-Entregue por: ${utils.escapeMarkdown(radioOpInfo.nome)}
+Entregue por: ${escapeMarkdown(radioOpInfo.nome)}
 📋 *Resumo da solicitação:*
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
-- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
-- Rádio-operador: ${utils.escapeMarkdown(radioOpInfo.nome)}
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
+- Viatura: ${escapeMarkdown(solicitacao.viatura.prefixo)} - ${escapeMarkdown(solicitacao.viatura.nome)}
+- Rádio-operador: ${escapeMarkdown(radioOpInfo.nome)}
 ✅ *Status: CHAVES ENTREGUES*`;
 
    if (solicitacao.messageIds.radioOperadores) {
@@ -906,9 +944,9 @@ Entregue por: ${utils.escapeMarkdown(radioOpInfo.nome)}
             `
 🎉 *CHAVES ENTREGUES - ${codigoSolicitacao}*
 📋 *Dados da solicitação:*
-- Solicitante: ${utils.escapeMarkdown(solicitacao.solicitante.nome)}
-- Viatura: ${utils.escapeMarkdown(solicitacao.viatura.prefixo)} - ${utils.escapeMarkdown(solicitacao.viatura.nome)}
-- Rádio-operador: ${utils.escapeMarkdown(radioOpInfo.nome)}
+- Solicitante: ${escapeMarkdown(solicitacao.solicitante.nome)}
+- Viatura: ${escapeMarkdown(solicitacao.viatura.prefixo)} - ${escapeMarkdown(solicitacao.viatura.nome)}
+- Rádio-operador: ${escapeMarkdown(radioOpInfo.nome)}
 
 🔑 *Status: CHAVES ENTREGUES!*
 📊 **Próximo passo:** Informe a quilometragem inicial da viatura.
@@ -1076,22 +1114,22 @@ async function processarEntradaKmFinal(bot, userId, texto) {
        const dataNecessidade = new Date(dadosCompletos.data_necessidade).toLocaleString('pt-BR');
        const dataEntrega = dadosCompletos.data_entrega ? new Date(dadosCompletos.data_entrega).toLocaleString('pt-BR') : 'N/I';
 
-       await bot.editMessageText(
+       await bot.editMessageText(`
             📋 *RESUMO FINAL DA SOLICITAÇÃO*
             ═══════════════════════════════
 
             🆔 **Código:** ${dadosCompletos.codigo_solicitacao}
 
             👤 **PESSOAS ENVOLVIDAS:**
-            - Solicitante: ${utils.escapeMarkdown(dadosCompletos.solicitante_nome)}
-            - Vistoriador: ${utils.escapeMarkdown(dadosCompletos.vistoriador_nome || 'N/I')}
-            - Autorizador: ${utils.escapeMarkdown(dadosCompletos.autorizador_nome || 'N/I')}
-            - Rádio-operador: ${utils.escapeMarkdown(radioOperadorNome)}
+            - Solicitante: ${escapeMarkdown(dadosCompletos.solicitante_nome)}
+            - Vistoriador: ${escapeMarkdown(dadosCompletos.vistoriador_nome || 'N/I')}
+            - Autorizador: ${escapeMarkdown(dadosCompletos.autorizador_nome || 'N/I')}
+            - Rádio-operador: ${escapeMarkdown(radioOperadorNome)}
 
 🚗 **VIATURA:**
-            - Nome: ${utils.escapeMarkdown(dadosCompletos.viatura_nome || 'N/I')}
-            - Prefixo: ${utils.escapeMarkdown(dadosCompletos.viatura_prefixo || 'N/I')}
-            - Placa: ${utils.escapeMarkdown(dadosCompletos.viatura_placa || 'N/I')}
+            - Nome: ${escapeMarkdown(dadosCompletos.viatura_nome || 'N/I')}
+            - Prefixo: ${escapeMarkdown(dadosCompletos.viatura_prefixo || 'N/I')}
+            - Placa: ${escapeMarkdown(dadosCompletos.viatura_placa || 'N/I')}
 
 📅 **DATAS E HORÁRIOS:**
 - Solicitação: ${dataSolicitacao}
@@ -1104,7 +1142,7 @@ async function processarEntradaKmFinal(bot, userId, texto) {
 - KM rodados: ${kmRodados.toLocaleString('pt-BR')}
 
 📝 **MOTIVO:**
-${utils.escapeMarkdown(dadosCompletos.motivo || 'N/I')}
+${escapeMarkdown(dadosCompletos.motivo || 'N/I')}
 
 ═══════════════════════════════
 ✅ **SOLICITAÇÃO FINALIZADA**
