@@ -299,30 +299,28 @@ Antes de prosseguir, você deve estar ciente das seguintes responsabilidades:
         }
 
         // >>> ALTERAÇÃO: Novo fluxo de aceitar responsabilidade <<<
-        if (data.startsWith('aceitar_responsabilidade_')) {
-            const solicitanteIdOriginal = data.split('_')[2];
-            if (userIdClicou.toString() !== solicitanteIdOriginal) {
-                bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Esta ação não é sua.' });
-                return;
-            }
-            const usuarioAuth = await authService.verificarAutenticacao(userIdClicou);
-            const nomeUsuario = usuarioAuth ? usuarioAuth.nome : callbackQuery.from.first_name;
-            
-            // Inicia a sessão para o novo fluxo interativo
-            await stateManager.setSession(userIdClicou, { 
-                nomeUsuario: nomeUsuario, 
-                chatId: chatId,
-                // Salva o ID da mensagem que será editada
-                interactiveMessageId: message.message_id 
-            });
-            
-            // Chama a primeira função do novo fluxo
-            requestService.solicitarData(bot, userIdClicou); 
-            bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Termos aceitos! Continue...' });
-            return;
-        }
-
-
+    if (data.startsWith('aceitar_responsabilidade_')) {
+        const solicitanteIdOriginal = data.split('_')[2];
+    if (userIdClicou.toString() !== solicitanteIdOriginal) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Esta ação não é sua.' });
+    return;
+    }
+    const usuarioAuth = await authService.verificarAutenticacao(userIdClicou);
+    const nomeUsuario = usuarioAuth ? usuarioAuth.nome : callbackQuery.from.first_name;
+    
+    // Inicia a sessão para o novo fluxo interativo
+    await stateManager.setSession(userIdClicou, { 
+        nomeUsuario: nomeUsuario, 
+        chatId: chatId,
+        // Salva o ID da "Mensagem A" que será editada durante o fluxo
+        interactiveMessageId: message.message_id 
+    });
+    
+    // Inicia o fluxo de coleta de dados editando a mensagem
+    await requestService.solicitarData(bot, userIdClicou); // Esta função será alterada
+    bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Termos aceitos! Prossiga...' });
+    return;
+}
         // Handler para cancelar solicitação
         if (data.startsWith('cancelar_solicitacao_')) {
             const solicitanteIdOriginal = data.split('_')[2];
