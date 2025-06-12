@@ -47,7 +47,9 @@ Digite seu CPF (apenas números, sem pontos ou traços):
     `, { parse_mode: 'Markdown' });
 }
 
-async function processarEntradaCpf(bot, userId, texto) {
+async function processarEntradaCpf(bot, msg) { // Assinatura corrigida
+    const userId = msg.from.id;
+    const texto = msg.text;
     const sessao = await stateManager.getSession(userId);
     if (!sessao || sessao.etapa !== 'aguardando_cpf') return false;
 
@@ -80,7 +82,9 @@ Digite sua matrícula:
     return true;
 }
 
-async function processarEntradaMatricula(bot, userId, texto) {
+async function processarEntradaMatricula(bot, msg) { // Assinatura corrigida
+    const userId = msg.from.id;
+    const texto = msg.text;
     const sessao = await stateManager.getSession(userId);
     if (!sessao || sessao.etapa !== 'aguardando_matricula') return false;
 
@@ -97,13 +101,14 @@ Digite sua matrícula novamente:
 
     const matricula = texto.trim().toUpperCase();
     sessao.matricula = matricula;
-    await stateManager.setSession(userId, sessao);
-
+    // A sessão é atualizada dentro da função seguinte
     await processarAutenticacaoCompleta(bot, userId, sessao.cpf, matricula);
     return true;
 }
 
-async function processarEntradaNome(bot, userId, texto) {
+async function processarEntradaNome(bot, msg) { // Assinatura corrigida
+    const userId = msg.from.id;
+    const texto = msg.text;
     const sessao = await stateManager.getSession(userId);
     if (!sessao || sessao.etapa !== 'aguardando_nome') return false;
 
@@ -171,10 +176,13 @@ Digite o CPF do novo usuário (apenas 11 números):
     `, { parse_mode: 'Markdown' });
 }
 
-async function processarEntradaCpfPreCadastro(bot, userIdVistoriador, textoCpf) {
+async function processarEntradaCpfPreCadastro(bot, msg) { // Assinatura corrigida
+    const userIdVistoriador = msg.from.id;
+    const textoCpf = msg.text;
     const sessao = await stateManager.getSession(userIdVistoriador);
     if (!sessao || sessao.etapa !== 'precad_aguardando_cpf') return false;
 
+    // ... o resto da função permanece igual
     const cpfLimpo = textoCpf.replace(/\D/g, '');
     if (cpfLimpo.length !== 11) {
         bot.sendMessage(sessao.chatId, `❌ *CPF INVÁLIDO*\nO CPF deve conter exatamente 11 números.\n\nDigite o CPF novamente:`, { parse_mode: 'Markdown' });
@@ -183,7 +191,7 @@ async function processarEntradaCpfPreCadastro(bot, userIdVistoriador, textoCpf) 
 
     const check = await db.checkUsuarioExistsDB(cpfLimpo, null);
     if (check.exists && check.byCpf) {
-        bot.sendMessage(sessao.chatId, `❌ *ERRO: CPF ${escapeMarkdown(cpfLimpo)} já cadastrado no sistema.* Tente novamente com outro CPF ou verifique os dados.`, { parse_mode: 'Markdown' });
+        bot.sendMessage(sessao.chatId, `❌ *ERRO: CPF ${utils.escapeMarkdown(cpfLimpo)} já cadastrado no sistema.* Tente novamente com outro CPF ou verifique os dados.`, { parse_mode: 'Markdown' });
         await stateManager.deleteSession(userIdVistoriador);
         return true;
     }
@@ -192,23 +200,25 @@ async function processarEntradaCpfPreCadastro(bot, userIdVistoriador, textoCpf) 
     sessao.etapa = 'precad_aguardando_matricula';
     await stateManager.setSession(userIdVistoriador, sessao);
 
-    bot.sendMessage(sessao.chatId, `✅ *CPF ${escapeMarkdown(cpfLimpo)} válido.*\n\n📋 *Etapa 2/3: MATRÍCULA do Novo Usuário*\nDigite a matrícula do novo usuário (apenas números):`, { parse_mode: 'Markdown' });
+    bot.sendMessage(sessao.chatId, `✅ *CPF ${utils.escapeMarkdown(cpfLimpo)} válido.*\n\n📋 *Etapa 2/3: MATRÍCULA do Novo Usuário*\nDigite a matrícula do novo usuário (pode conter letras e números):`, { parse_mode: 'Markdown' });
     return true;
 }
 
-async function processarEntradaMatriculaPreCadastro(bot, userIdVistoriador, textoMatricula) {
+async function processarEntradaMatriculaPreCadastro(bot, msg) { // Assinatura corrigida
+    const userIdVistoriador = msg.from.id;
+    const textoMatricula = msg.text;
     const sessao = await stateManager.getSession(userIdVistoriador);
     if (!sessao || sessao.etapa !== 'precad_aguardando_matricula') return false;
 
-    const matriculaLimpa = textoMatricula.replace(/\D/g, '');
+    const matriculaLimpa = textoMatricula.trim().toUpperCase();
     if (matriculaLimpa.length === 0) {
-        bot.sendMessage(sessao.chatId, `❌ *MATRÍCULA INVÁLIDA*\nDigite uma matrícula válida (apenas números).\n\nDigite a matrícula novamente:`, { parse_mode: 'Markdown' });
+        bot.sendMessage(sessao.chatId, `❌ *MATRÍCULA INVÁLIDA*\nDigite uma matrícula válida.\n\nDigite a matrícula novamente:`, { parse_mode: 'Markdown' });
         return true;
     }
-
+    // ... o resto da função permanece igual
     const check = await db.checkUsuarioExistsDB(null, matriculaLimpa);
     if (check.exists && check.byMatricula) {
-        bot.sendMessage(sessao.chatId, `❌ *ERRO: Matrícula ${escapeMarkdown(matriculaLimpa)} já cadastrada no sistema.* Tente novamente com outra matrícula ou verifique os dados.`, { parse_mode: 'Markdown' });
+        bot.sendMessage(sessao.chatId, `❌ *ERRO: Matrícula ${utils.escapeMarkdown(matriculaLimpa)} já cadastrada no sistema.* Tente novamente com outra matrícula ou verifique os dados.`, { parse_mode: 'Markdown' });
         await stateManager.deleteSession(userIdVistoriador);
         return true;
     }
@@ -223,7 +233,7 @@ async function processarEntradaMatriculaPreCadastro(bot, userIdVistoriador, text
         ]))
     };
 
-    bot.sendMessage(sessao.chatId, `✅ *Matrícula ${escapeMarkdown(matriculaLimpa)} válida.*\n\n📋 *Etapa 3/3: TIPO do Novo Usuário*\nSelecione o tipo para o novo usuário:`, {
+    bot.sendMessage(sessao.chatId, `✅ *Matrícula ${utils.escapeMarkdown(matriculaLimpa)} válida.*\n\n📋 *Etapa 3/3: TIPO do Novo Usuário*\nSelecione o tipo para o novo usuário:`, {
         parse_mode: 'Markdown',
         reply_markup: keyboardTipos
     });

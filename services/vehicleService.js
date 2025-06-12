@@ -48,7 +48,9 @@ A viatura foi adicionada ao sistema e já está disponível para uso.
     }
 }
 
-async function processarEntradaPrefixoViatura(bot, userId, texto) {
+async function processarEntradaPrefixoViatura(bot, msg) { // Assinatura corrigida
+    const userId = msg.from.id;
+    const texto = msg.text;
     const sessao = await stateManager.getSession(userId);
     if (!sessao || sessao.etapa !== 'aguardando_prefixo') return false;
 
@@ -61,11 +63,13 @@ async function processarEntradaPrefixoViatura(bot, userId, texto) {
     sessao.etapa = 'aguardando_nome_viatura';
     await stateManager.setSession(userId, sessao);
     
-    bot.sendMessage(sessao.chatId, `✅ *Prefixo salvo:* ${utils.escapeMarkdown(sessao.novaViatura.prefixo)}\n\n📝 *Etapa 2/6: NOME*\n\nDigite o nome/descrição da viatura (ex: Viatura 006 - Patrulha):`, { parse_mode: 'Markdown' });
+    bot.sendMessage(sessao.chatId, `✅ *Prefixo salvo:* ${escapeMarkdown(sessao.novaViatura.prefixo)}\n\n📝 *Etapa 2/6: NOME*\n\nDigite o nome/descrição da viatura (ex: Viatura 006 - Patrulha):`, { parse_mode: 'Markdown' });
     return true;
 }
 
-async function processarEntradaNomeViatura(bot, userId, texto) {
+async function processarEntradaNomeViatura(bot, msg) { // Assinatura corrigida
+    const userId = msg.from.id;
+    const texto = msg.text;
     const sessao = await stateManager.getSession(userId);
     if (!sessao || sessao.etapa !== 'aguardando_nome_viatura') return false;
 
@@ -78,11 +82,13 @@ async function processarEntradaNomeViatura(bot, userId, texto) {
     sessao.etapa = 'aguardando_modelo';
     await stateManager.setSession(userId, sessao);
     
-    bot.sendMessage(sessao.chatId, `✅ *Nome salvo:* ${utils.escapeMarkdown(sessao.novaViatura.nome)}\n\n📝 *Etapa 3/6: MODELO*\n\nDigite o modelo da viatura (ex: Ford Ka Sedan, Chevrolet Onix):`, { parse_mode: 'Markdown' });
+    bot.sendMessage(sessao.chatId, `✅ *Nome salvo:* ${escapeMarkdown(sessao.novaViatura.nome)}\n\n📝 *Etapa 3/6: MODELO*\n\nDigite o modelo da viatura (ex: Ford Ka Sedan, Chevrolet Onix):`, { parse_mode: 'Markdown' });
     return true;
 }
 
-async function processarEntradaModeloViatura(bot, userId, texto) {
+async function processarEntradaModeloViatura(bot, msg) { // Assinatura corrigida
+    const userId = msg.from.id;
+    const texto = msg.text;
     const sessao = await stateManager.getSession(userId);
     if (!sessao || sessao.etapa !== 'aguardando_modelo') return false;
 
@@ -95,11 +101,13 @@ async function processarEntradaModeloViatura(bot, userId, texto) {
     sessao.etapa = 'aguardando_placa';
     await stateManager.setSession(userId, sessao);
     
-    bot.sendMessage(sessao.chatId, `✅ *Modelo salvo:* ${utils.escapeMarkdown(sessao.novaViatura.modelo)}\n\n📝 *Etapa 4/6: PLACA*\n\nDigite a placa da viatura (ex: ABC-1234):`, { parse_mode: 'Markdown' });
+    bot.sendMessage(sessao.chatId, `✅ *Modelo salvo:* ${escapeMarkdown(sessao.novaViatura.modelo)}\n\n📝 *Etapa 4/6: PLACA*\n\nDigite a placa da viatura (ex: ABC-1234):`, { parse_mode: 'Markdown' });
     return true;
 }
 
-async function processarEntradaPlacaViatura(bot, userId, texto) {
+async function processarEntradaPlacaViatura(bot, msg) { // Assinatura corrigida
+    const userId = msg.from.id;
+    const texto = msg.text;
     const sessao = await stateManager.getSession(userId);
     if (!sessao || sessao.etapa !== 'aguardando_placa') return false;
 
@@ -118,11 +126,13 @@ async function processarEntradaPlacaViatura(bot, userId, texto) {
     sessao.etapa = 'aguardando_km';
     await stateManager.setSession(userId, sessao);
     
-    bot.sendMessage(sessao.chatId, `✅ *Placa salva:* ${utils.escapeMarkdown(placa)}\n\n📝 *Etapa 5/6: QUILOMETRAGEM*\n\nDigite a quilometragem atual da viatura (apenas números):`, { parse_mode: 'Markdown' });
+    bot.sendMessage(sessao.chatId, `✅ *Placa salva:* ${escapeMarkdown(placa)}\n\n📝 *Etapa 5/6: QUILOMETRAGEM*\n\nDigite a quilometragem atual da viatura (apenas números):`, { parse_mode: 'Markdown' });
     return true;
 }
 
-async function processarEntradaKmViatura(bot, userId, texto) {
+async function processarEntradaKmViatura(bot, msg) { // Assinatura corrigida
+    const userId = msg.from.id;
+    const texto = msg.text;
     const sessao = await stateManager.getSession(userId);
     if (!sessao || sessao.etapa !== 'aguardando_km') return false;
 

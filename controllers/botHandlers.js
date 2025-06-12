@@ -353,46 +353,9 @@ Agora você precisa informar a quilometragem inicial da viatura.
                 parse_mode: 'Markdown' 
             });
 
-            requestService.solicitarKmInicial(bot, chatId, userIdClicou, codigoSolicitacao);
-            bot.answerCallbackQuery(callbackQuery.id, { text: '📊 Informe o KM inicial' });
-            return;
-        }
-
-        // Handler para informar KM final
-        if (data.startsWith('km_final_')) {
-            const [_, __, codigoSolicitacao, solicitanteIdOriginal] = data.split('_');
+            await requestService.solicitarKmInicial(bot, message, userIdClicou, codigoSolicitacao);
             
-            if (userIdClicou.toString() !== solicitanteIdOriginal) {
-                bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Esta ação não é sua.' });
-                return;
-            }
-
-            try {
-                const kmInicial = await db.getKmInicialSolicitacao(codigoSolicitacao);
-                if (!kmInicial) {
-                    bot.answerCallbackQuery(callbackQuery.id, { text: '❌ KM inicial não encontrado.' });
-                    return;
-                }
-
-                const solicitacao = stateManager.getRequest(codigoSolicitacao);
-                await bot.editMessageText(`
-📊 *INFORMAR KM FINAL - ${codigoSolicitacao}*
-
-✅ KM inicial: ${kmInicial.toLocaleString('pt-BR')}
-
-Digite a quilometragem final da viatura:
-                `, { 
-                    chat_id: chatId, 
-                    message_id: solicitacao.messageIds.solicitante,
-                    parse_mode: 'Markdown' 
-                });
-
-                requestService.solicitarKmFinal(bot, chatId, userIdClicou, codigoSolicitacao, kmInicial);
-                bot.answerCallbackQuery(callbackQuery.id, { text: '📊 Informe o KM final' });
-            } catch (error) {
-                console.error('Erro ao buscar KM inicial:', error);
-                bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Erro ao processar solicitação.' });
-            }
+            bot.answerCallbackQuery(callbackQuery.id, { text: '📊 Informe o KM inicial...' });
             return;
         }
         
