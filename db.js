@@ -200,13 +200,18 @@ async function salvarSolicitacaoDB(solicitacao) {
 }
 
 // Atualiza o status e outros dados de uma solicitação existente.
-async function atualizarStatusSolicitacaoDB(codigoSolicitacao, novoStatus, dadosAdicionais = {}) {
+// db.js (versão corrigida)
+async function atualizarStatusSolicitacaoDB(codigoSolicitacao, novoStatus, dadosAdicionais = {}, dbConnection = null) {
+    const executor = dbConnection || pool; // Usa a conexão da transação se ela for passada
     try {
         let query = 'UPDATE logs_solicitacoes SET status_final = ?';
         const params = [novoStatus];
-
-        // Lista branca de campos permitidos para evitar injeção de SQL via nomes de colunas
-        const allowedFields = ['km_inicial', 'km_final', 'observacoes', 'viatura_id'];
+        
+        // Lista branca de campos permitidos para evitar injeção de SQL
+        const allowedFields = [
+            'viatura_prefixo', 'viatura_nome', 'viatura_placa', // Adicionado para esta transação
+            'km_inicial', 'km_final', 'observacoes', 'viatura_id'
+        ];
         const campos = Object.keys(dadosAdicionais).filter(campo => allowedFields.includes(campo));
         for (const campo of campos) {
             query += `, ${campo} = ?`;
@@ -220,7 +225,7 @@ async function atualizarStatusSolicitacaoDB(codigoSolicitacao, novoStatus, dados
         query += ' WHERE codigo_solicitacao = ?';
         params.push(codigoSolicitacao);
 
-        await pool.execute(query, params);
+        await executor.execute(query, params); // <-- USA O EXECUTOR (CONEXÃO OU POOL)
         return true;
     } catch (error) {
         console.error('Erro em atualizarStatusSolicitacaoDB:', error);
