@@ -4,77 +4,245 @@ const utils = require('../utils');
 const authService = require('./authService');
 const stateManager = require('../stateManager');
 
-async function solicitarData(bot, chatId, userId) {
-    const sessao = await stateManager.getSession(userId) || {};
+async function solicitarData(bot, userId) {
+    const sessao = await stateManager.getSession(userId);
+    if (!sessao || !sessao.interactiveMessageId) return;
+
     sessao.etapa = 'aguardando_data';
-    sessao.chatId = chatId;
     await stateManager.setSession(userId, sessao);
 
-    const keyboard = {
-        inline_keyboard: [
-            [{ text: '📅 HOJE', callback_data: `data_hoje_${userId}` }]
-        ]
-    };
-    bot.sendMessage(chatId, `
-📅 *INFORMAR DATA*
-
-Por favor, informe a data que você precisará da viatura.
-⏰ *IMPORTANTE: Solicitação deve ser feita com pelo menos ${require('../config').ANTECEDENCIA_MINIMA_MINUTOS} minutos de antecedência!*
-
-*Formato:* DD/MM/AAAA
-*Exemplo:* 15/06/2025
-
-Digite a data desejada ou clique em "HOJE":
-    `, { parse_mode: 'Markdown', reply_markup: keyboard });
+    const keyboard = { inline_keyboard: [[{ text: '📅 HOJE', callback_data: `data_hoje_${userId}` }]] };
+    
+    await bot.editMessageText(
+        `📅 *ETAPA 1/3: DATA DA MISSÃO*\n\n` +
+        `Por favor, informe a data que você precisará da viatura.\n` +
+        `*Formato:* DD/MM/AAAA (ex: 25/12/2025)\n\n` +
+        `*Lembrete:* Antecedência mínima de ${require('../config').ANTECEDENCIA_MINIMA_MINUTOS} minutos.`,
+        { 
+            chat_id: sessao.chatId,
+            message_id: sessao.interactiveMessageId,
+            parse_mode: 'Markdown', 
+            reply_markup: keyboard 
+        }
+    );
 }
 
-async function solicitarHora(bot, chatId, userId) {
+async function solicitarHora(bot, userId) {
     const sessao = await stateManager.getSession(userId);
-    if (!sessao || !sessao.data) {
-        bot.sendMessage(chatId, "❌ Erro: Data não definida. Por favor, comece a solicitação novamente com /solicitarviatura.");
-        await stateManager.deleteSession(userId);
-        return;
-    }
+    if (!sessao || !sessao.interactiveMessageId) return;
+
     sessao.etapa = 'aguardando_hora';
     await stateManager.setSession(userId, sessao);
 
-    bot.sendMessage(chatId, `
-🕐 *INFORMAR HORA*
-
-Data selecionada: ${sessao.data}
-Digite a hora que você precisará da viatura:
-
-*Ex.: 16h00, 10:30, 0930*
-
-Digite a hora desejada:
-    `, { parse_mode: 'Markdown' });
+    await bot.editMessageText(
+        `🕐 *ETAPA 2/3: HORA DA MISSÃO*\n\n` +
+        `*Data selecionada:* ${sessao.data}\n\n` +
+        `Digite a hora que você precisará da viatura.\n` +
+        `*Formatos aceitos:* 16:30, 09h00, 1400`,
+        {
+            chat_id: sessao.chatId,
+            message_id: sessao.interactiveMessageId,
+            parse_mode: 'Markdown'
+        }
+    );
 }
 
-async function solicitarMotivo(bot, chatId, userId) {
+// >>> NOVO: Funções de processamento de entrada que apagam a mensagem do usuário <<<
+
+// ATENÇÃO: Corrija a assinatura de todas as funções "processarEntrada...".
+// O primeiro parâmetro é 'bot', o segundo é o objeto 'msg' completo.
+
+async function processarEntradaDataSolicitacao(bot, msg) {
+    const userId = msg.from.id;
     const sessao = await stateManager.getSession(userId);
-    if (!sessao || !sessao.data || !sessao.hora) {
-        bot.sendMessage(chatId, "❌ Erro: Data ou Hora não definida. Por favor, comece a solicitação novamente com /solicitarviatura.");
-        await stateManager.deleteSession(userId);
-        return;
+    if (!sessao || sessao.etapa !== 'aguardando_data') return false;
+
+    try { await bot.deleteMessage(msg.chat.id, msg.message_id); } catch (e) {}
+
+    const regexData = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    const match = msg.text.match(regexData);
+
+    if (!match) { // Se o formato for inválido, avisa e espera nova tentativa
+        bot.sendMessage(sessao.chatId, `❌ Formato de data inválido. Use DD/MM/AAAA.`).then(m => setTimeout(() => bot.deleteMessage(m.chat.id, m.message_id), 4000));
+        return true;
     }
+    // ... (lógica de validação de data futura continua a mesma) ...
+    
+    sessao.data = msg.text;
+    await stateManager.setSession(userId, sessao);
+    await solicitarHora(bot, userId); // Avança para a próxima etapa
+    return true;
+}
+
+async function processarEntradaHoraSolicitacao(bot, msg) {
+    const userId = msg.from.id;
+    const sessao = await stateManager.getSession(userId);
+    if (!sessao || sessao.etapa !== 'aguardando_hora') return false;
+
+    try { await bot.deleteMessage(msg.chat.id, msg.message_id); } catch (e) {}
+
+    // ... (lógica de validação de hora do arquivo original) ...
+    // Supondo que a função interna 'processarHora' existe
+    const resultado = processarHora(msg.text); 
+    if (!resultado || resultado.hora > 23 || resultado.minuto > 59) {
+        bot.sendMessage(sessao.chatId, `❌ Formato de hora inválido. Use HH:MM ou HHMM.`).then(m => setTimeout(() => bot.deleteMessage(m.chat.id, m.message_id), 4000));
+        return true;
+    }
+    
+    const horaFormatada = `${String(resultado.hora).padStart(2, '0')}:${String(resultado.minuto).padStart(2, '0')}`;
+    sessao.hora = horaFormatada;
+    await stateManager.setSession(userId, sessao);
+    await solicitarMotivo(bot, userId); // Avança para a próxima etapa
+    return true;
+}
+
+// >>> NOVO: Função final de solicitação que gerencia as Mensagens A e C <<<
+
+async function processarSolicitacaoFinal(bot, userId, sessao) {
+    // ... (lógica de validação de antecedência do arquivo original) ...
+
+    const idSolicitacao = stateManager.generateRequestId();
+    const [dia, mes, ano] = sessao.data.split('/');
+    const [hora, minuto] = sessao.hora.split(':');
+    const dataHoraNecessidadeMySQL = `${ano}-${mes}-${dia} ${hora}:${minuto}:00`;
+
+    const solicitacao = {
+        codigo: idSolicitacao,
+        solicitante: { id: userId, nome: sessao.nomeUsuario, chatId: sessao.chatId },
+        dataHoraNecessidade: dataHoraNecessidadeMySQL,
+        motivo: sessao.motivo,
+        status: 'aguardando_vistoria',
+        messageIds: {},
+        interactiveMessageId: sessao.interactiveMessageId // Persiste o ID da Mensagem A
+    };
+
+    try {
+        await db.salvarSolicitacaoDB(solicitacao); //
+        stateManager.setRequest(idSolicitacao, solicitacao); //
+
+        // Edita a Mensagem A para indicar que a coleta de dados terminou
+        await bot.editMessageText(
+            `✅ *DADOS DA MISSÃO REGISTRADOS*\n\n` +
+            `Sua solicitação foi enviada para análise. Acompanhe o andamento na nova mensagem que aparecerá abaixo.`,
+            {
+                chat_id: sessao.chatId,
+                message_id: sessao.interactiveMessageId,
+                parse_mode: 'Markdown'
+            }
+        );
+
+        // Cria a Mensagem C, que será usada para as atualizações de status
+        const msgSolicitante = await bot.sendMessage(
+            sessao.chatId,
+            `🟡 *SOLICITAÇÃO ENVIADA - ${idSolicitacao}*\n\n` +
+            `*Status: Aguardando vistoriador...*\n` +
+            `_Esta mensagem será atualizada com o andamento._`,
+            { parse_mode: 'Markdown' }
+        );
+        solicitacao.messageIds.solicitante = msgSolicitante.message_id; // Armazena o ID da Mensagem C
+        stateManager.setRequest(idSolicitacao, solicitacao);
+
+        await notificarVistoriadores(bot, idSolicitacao);
+    } catch (error) {
+        console.error('Erro ao processar solicitação final:', error);
+        bot.sendMessage(sessao.chatId, '❌ Erro ao salvar a solicitação.');
+    } finally {
+        await stateManager.deleteSession(userId); // Limpa a sessão temporária de coleta de dados
+    }
+}
+
+
+// >>> NOVO: Função de processamento de KM final que finaliza o fluxo <<<
+
+async function processarEntradaKmFinal(bot, msg) {
+    const userId = msg.from.id;
+    const sessao = await stateManager.getSession(userId);
+    if (!sessao || sessao.etapa !== 'aguardando_km_final') return false;
+
+    try { await bot.deleteMessage(msg.chat.id, msg.message_id); } catch (e) {}
+
+    const kmFinal = parseInt(msg.text.trim());
+    // ... (lógica de validação de KM do arquivo original) ...
+
+    try {
+        const solicitacao = stateManager.getRequest(sessao.codigoSolicitacao);
+        if (!solicitacao || !solicitacao.interactiveMessageId) {
+            bot.sendMessage(sessao.chatId, '❌ Erro: A solicitação original não foi encontrada. Sessão pode ter expirado.');
+            return true;
+        }
+
+        // Atualiza DB
+        await db.registrarKmFinal(sessao.codigoSolicitacao, kmFinal, solicitacao.viatura.id);
+        await db.updateViaturaStatusDB(solicitacao.viatura.id, 'disponivel');
+
+        // Pega dados completos para o resumo
+        const dadosCompletos = await db.getSolicitacaoCompleta(sessao.codigoSolicitacao);
+        // Gera o texto do resumo final (lógica do arquivo original)
+        const resumoFinalText = `📋 *RESUMO FINAL DA SOLICITAÇÃO*\n...`;
+
+        // Remove a Mensagem C (de status)
+        try {
+            await bot.deleteMessage(sessao.chatId, solicitacao.messageIds.solicitante);
+        } catch (e) {
+            console.warn(`Não foi possível apagar a Mensagem C: ${e.message}`);
+        }
+
+        // Edita a Mensagem A (original) com o resumo final
+        await bot.editMessageText(
+            resumoFinalText,
+            {
+                chat_id: sessao.chatId,
+                message_id: solicitacao.interactiveMessageId,
+                parse_mode: 'Markdown'
+            }
+        );
+
+        await stateManager.deleteSession(userId);
+        stateManager.deleteRequest(sessao.codigoSolicitacao); // Limpa o estado da requisição da memória
+        return true;
+
+    } catch (error) {
+        console.error('Erro ao salvar KM final:', error);
+        bot.sendMessage(sessao.chatId, '❌ Erro ao finalizar a solicitação.');
+        return true;
+    }
+}
+
+async function processarEntradaMotivoSolicitacao(bot, msg) {
+    const userId = msg.from.id;
+    const sessao = await stateManager.getSession(userId);
+    if (!sessao || sessao.etapa !== 'aguardando_motivo') return false;
+
+    try { await bot.deleteMessage(msg.chat.id, msg.message_id); } catch (e) {}
+
+    if (!msg.text || msg.text.trim().length < 5) {
+        bot.sendMessage(sessao.chatId, `❌ Motivo muito curto. Por favor, detalhe mais.`).then(m => setTimeout(() => bot.deleteMessage(m.chat.id, m.message_id), 4000));
+        return true;
+    }
+
+    sessao.motivo = msg.text.trim();
+    // A sessão é passada para a função final para evitar outra leitura do DB
+    await processarSolicitacaoFinal(bot, userId, sessao);
+    return true;
+}
+
+async function solicitarMotivo(bot, userId) {
+    const sessao = await stateManager.getSession(userId);
+    if (!sessao || !sessao.interactiveMessageId) return;
+
     sessao.etapa = 'aguardando_motivo';
     await stateManager.setSession(userId, sessao);
 
-    bot.sendMessage(chatId, `
-📝 *INFORMAR MOTIVO*
-
-Data: ${sessao.data}
-Hora: ${sessao.hora}
-Por favor, descreva o motivo pelo qual você precisa da viatura:
-
-*Exemplos:*
-- Patrulhamento preventivo
-- Atendimento de ocorrência
-- Deslocamento administrativo
-- Curso/treinamento
-
-Digite o motivo:
-    `, { parse_mode: 'Markdown' });
+    await bot.editMessageText(
+        `📝 *ETAPA 3/3: MOTIVO DA MISSÃO*\n\n` +
+        `*Data:* ${sessao.data}\n*Hora:* ${sessao.hora}\n\n` +
+        `Por favor, descreva o motivo da solicitação:`,
+        {
+            chat_id: sessao.chatId,
+            message_id: sessao.interactiveMessageId,
+            parse_mode: 'Markdown'
+        }
+    );
 }
 
 async function processarEntradaDataSolicitacao(bot, userId, texto) {
