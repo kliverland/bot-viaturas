@@ -19,7 +19,7 @@ function init(bot) {
         const usuario = await authService.verificarAcesso(bot, msg);
         if (!usuario) return;
 
-        let welcomeMessage = `🚗 *Bot de Solicitação de Viaturas* 🚗\n\nBem-vindo, ${utils.escapeMarkdown(usuario.nome)}!\n\n*Comandos disponíveis:*\n• /solicitarviatura - Solicitar uma viatura\n• /status - Ver status das suas solicitações\n• /help - Ajuda`;
+        let welcomeMessage = `🚗 *Bot de Solicitação de Viaturas* 🚗\n\nBem-vindo, ${escapeMarkdown(usuario.nome)}!\n\n*Comandos disponíveis:*\n• /solicitarviatura - Solicitar uma viatura\n• /status - Ver status das suas solicitações\n• /help - Ajuda`;
         if (utils.temPermissao(usuario.tipo_usuario, 'vistoriador')) {
             welcomeMessage += `\n\n*Comandos do Vistoriador:*\n• /addviatura - Cadastrar nova viatura\n• /listviaturas - Ver todas as viaturas\n• /adduser - Pré-cadastrar novo usuário\n• /updatestatus - Atualizar status de viatura`;
         }
@@ -70,10 +70,10 @@ function init(bot) {
             }
             let mensagem = '*🚗 VIATURAS CADASTRADAS:*\n\n';
             rows.forEach(viatura => {
-                mensagem += `${config.STATUS_VIATURAS[viatura.status] || '⚪ Status Desconhecido'} *${utils.escapeMarkdown(viatura.prefixo)}*\n`;
-                mensagem += `• Nome: ${utils.escapeMarkdown(viatura.nome)}\n`;
-                mensagem += `• Modelo: ${utils.escapeMarkdown(viatura.modelo || 'N/I')}\n`;
-                mensagem += `• Placa: ${utils.escapeMarkdown(viatura.placa || 'N/I')}\n`;
+                mensagem += `${config.STATUS_VIATURAS[viatura.status] || '⚪ Status Desconhecido'} *${escapeMarkdown(viatura.prefixo)}*\n`;
+                mensagem += `• Nome: ${escapeMarkdown(viatura.nome)}\n`;
+                mensagem += `• Modelo: ${escapeMarkdown(viatura.modelo || 'N/I')}\n`;
+                mensagem += `• Placa: ${escapeMarkdown(viatura.placa || 'N/I')}\n`;
                 mensagem += `• KM: ${parseInt(viatura.km_atual || 0).toLocaleString('pt-BR')}\n\n`;
             });
             const totalDisponiveis = rows.filter(v => v.status === 'disponivel').length;
@@ -123,12 +123,12 @@ Antes de prosseguir, você deve estar ciente das seguintes responsabilidades:
             let mensagem = '*📋 SUAS SOLICITAÇÕES:*\n\n';
             const statusEmoji = { 'aguardando_vistoria': '🟡', 'em_vistoria': '🟠', 'aguardando_autorizacao': '🔵', 'autorizada': '✅', 'negada': '❌', 'entregue': '🚗', 'finalizada': '🏁' };
             rows.forEach(sol => {
-                mensagem += `${statusEmoji[sol.status_final] || '⚪'} *${utils.escapeMarkdown(sol.codigo_solicitacao)}*\n`;
-                mensagem += `• Status: ${utils.escapeMarkdown(sol.status_final.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Desconhecido')}\n`;
+                mensagem += `${statusEmoji[sol.status_final] || '⚪'} *${escapeMarkdown(sol.codigo_solicitacao)}*\n`;
+                mensagem += `• Status: ${escapeMarkdown(sol.status_final.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Desconhecido')}\n`;
                 mensagem += `• Solicitação: ${new Date(sol.data_solicitacao).toLocaleString('pt-BR')}\n`;
                 mensagem += `• Necessidade: ${new Date(sol.data_necessidade).toLocaleString('pt-BR')}\n`;
-                if (sol.motivo) mensagem += `• Motivo: ${utils.escapeMarkdown(sol.motivo)}\n`;
-                if (sol.viatura_prefixo) mensagem += `• Viatura: ${utils.escapeMarkdown(sol.viatura_prefixo)}\n`;
+                if (sol.motivo) mensagem += `• Motivo: ${escapeMarkdown(sol.motivo)}\n`;
+                if (sol.viatura_prefixo) mensagem += `• Viatura: ${escapeMarkdown(sol.viatura_prefixo)}\n`;
                 mensagem += '\n';
             });
             bot.sendMessage(msg.chat.id, mensagem, { parse_mode: 'Markdown' });
@@ -195,9 +195,9 @@ Antes de prosseguir, você deve estar ciente das seguintes responsabilidades:
         const usuario = await authService.verificarAcesso(bot, msg);
         if (!usuario) return;
         const vistoriadores = await db.getUsuariosPorTipoDB('vistoriador');
-        let debugMessage = `🔍 *DEBUG - Informações do Sistema*\n\n👤 *Seus dados:*\n• ID: ${msg.from.id}\n• Nome: ${utils.escapeMarkdown(usuario.nome)}\n• Tipo: ${usuario.tipo_usuario}\n\n`;
+        let debugMessage = `🔍 *DEBUG - Informações do Sistema*\n\n👤 *Seus dados:*\n• ID: ${msg.from.id}\n• Nome: ${escapeMarkdown(usuario.nome)}\n• Tipo: ${usuario.tipo_usuario}\n\n`;
         debugMessage += `👥 *Vistoriadores (${vistoriadores.length}):*\n`;
-        vistoriadores.forEach((v, i) => { debugMessage += `${i + 1}. ${utils.escapeMarkdown(v.nome)} (Telegram ID: ${v.telegram_id}) ${v.telegram_id == msg.from.id ? '← VOCÊ' : ''}\n`; });
+        vistoriadores.forEach((v, i) => { debugMessage += `${i + 1}. ${escapeMarkdown(v.nome)} (Telegram ID: ${v.telegram_id}) ${v.telegram_id == msg.from.id ? '← VOCÊ' : ''}\n`; });
         if (vistoriadores.length === 0) {
             debugMessage += `⚠️ *PROBLEMA: Nenhum vistoriador encontrado no banco!*\n`;
         }
