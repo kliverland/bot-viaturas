@@ -407,7 +407,7 @@ Agora você precisa informar a quilometragem inicial da viatura.
                     return;
                 }
 
-                const erro = await requestService.processarRespostaVistoriador(bot, userIdClicou, codigoSolicitacao);
+                const erro = await requestService.processarRespostaVistoriador(bot, userIdClicou, codigoSolicitacao, message);
                 if (erro) {
                     bot.answerCallbackQuery(callbackQuery.id, { text: erro });
                     return;

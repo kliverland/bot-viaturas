@@ -3,6 +3,43 @@ const { formatarDataHora, validarAntecedencia, escapeMarkdown } = require('../ut
 const authService = require('./authService');
 const stateManager = require('../stateManager');
 
+const statusLabelsVistoriador = {
+    aguardando_autorizacao: 'Aguardando autorização',
+    autorizada: 'Autorizada',
+    entregue: 'Chaves entregues',
+    em_uso: 'Em uso',
+    finalizada: 'Finalizada'
+};
+
+function montarMensagemVistoriador(solicitacao) {
+    let texto = `🛠️ *ACOMPANHAMENTO - ${escapeMarkdown(solicitacao.codigo)}*\n`;
+    texto += `*Status:* ${statusLabelsVistoriador[solicitacao.status] || solicitacao.status}\n`;
+    if (solicitacao.viatura) {
+        texto += `• Viatura: ${escapeMarkdown(solicitacao.viatura.prefixo)}\n`;
+    }
+    if (solicitacao.radioOperador) {
+        texto += `• Chaves entregues por: ${escapeMarkdown(solicitacao.radioOperador.nome)}\n`;
+    }
+    if (typeof solicitacao.kmInicial !== 'undefined') {
+        texto += `• KM inicial: ${solicitacao.kmInicial.toLocaleString('pt-BR')}\n`;
+    }
+    if (typeof solicitacao.kmFinal !== 'undefined') {
+        texto += `• KM final: ${solicitacao.kmFinal.toLocaleString('pt-BR')}\n`;
+    }
+    return texto.trim();
+}
+
+async function atualizarMensagemVistoriador(bot, solicitacao) {
+    if (!solicitacao.messageIds || !solicitacao.messageIds.vistoriadorAtendente) return;
+    const { chatId, messageId } = solicitacao.messageIds.vistoriadorAtendente;
+    const texto = montarMensagemVistoriador(solicitacao);
+    try {
+        await bot.editMessageText(texto, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' });
+    } catch (e) {
+        console.error('Erro ao atualizar mensagem do vistoriador:', e.message);
+    }
+}
+
 function processarHora(input) {
     if (!input) return null;
     const textoLimpo = input.trim();
@@ -291,7 +328,7 @@ Esta solicitação ainda aguarda vistoriador há mais de 3 minutos.
 }
 
 // *** FUNÇÃO CORRIGIDA COM VERIFICAÇÃO ADICIONAL ***
-async function processarRespostaVistoriador(bot, userId, codigoSolicitacao) {
+async function processarRespostaVistoriador(bot, userId, codigoSolicitacao, message) {
     const solicitacao = stateManager.getRequest(codigoSolicitacao);
     if (!solicitacao) return 'Solicitação não encontrada.';
     if (solicitacao.status !== 'aguardando_vistoria') {
@@ -303,6 +340,7 @@ async function processarRespostaVistoriador(bot, userId, codigoSolicitacao) {
 
     solicitacao.status = 'em_vistoria';
     solicitacao.vistoriador = { id: userId, nome: vistoriadorInfo.nome };
+    solicitacao.messageIds.vistoriadorAtendente = { chatId: message.chat.id, messageId: message.message_id };
     stateManager.setRequest(codigoSolicitacao, solicitacao);
     stateManager.clearRequestTimeout(codigoSolicitacao);
 
@@ -568,6 +606,7 @@ A viatura reservada foi liberada. Entre em contato com o autorizador para mais d
        }
    }
    stateManager.setRequest(codigoSolicitacao, solicitacao);
+   await atualizarMensagemVistoriador(bot, solicitacao);
    return null;
 }
 
@@ -660,8 +699,9 @@ Entregue por: ${escapeMarkdown(radioOpInfo.nome)}
        console.error("Erro edit msg solicitante (entrega):", e.message);
    }
 
-   stateManager.setRequest(codigoSolicitacao, solicitacao);
-   return null;
+    stateManager.setRequest(codigoSolicitacao, solicitacao);
+    await atualizarMensagemVistoriador(bot, solicitacao);
+    return null;
 }
 
 async function solicitarKmInicial(bot, message, userId, codigoSolicitacao) {
@@ -742,6 +782,8 @@ async function processarEntradaKmInicial(bot, msg) {
 
         await db.registrarKmInicial(sessao.codigoSolicitacao, km, solicitacao.viatura.id);
         await db.updateViaturaStatusDB(solicitacao.viatura.id, 'em_uso');
+        solicitacao.status = 'em_uso';
+        solicitacao.kmInicial = km;
         
         // Atualiza a mensagem principal do solicitante
         await bot.editMessageText(
@@ -770,6 +812,8 @@ Ao final da missão, informe o KM final para concluir.
 
         sessao.etapa = 'aguardando_km_final';
         await stateManager.setSession(userId, sessao);
+        stateManager.setRequest(sessao.codigoSolicitacao, solicitacao);
+        await atualizarMensagemVistoriador(bot, solicitacao);
         return true;
 
     } catch (error) {
@@ -824,6 +868,8 @@ async function processarEntradaKmFinal(bot, msg) {
         const solicitacao = stateManager.getRequest(sessao.codigoSolicitacao);
         await db.registrarKmFinal(sessao.codigoSolicitacao, kmFinal, solicitacao.viatura.id);
         await db.updateViaturaStatusDB(solicitacao.viatura.id, 'disponivel');
+        solicitacao.status = 'finalizada';
+        solicitacao.kmFinal = kmFinal;
         
         const dadosCompletos = await db.getSolicitacaoCompleta(sessao.codigoSolicitacao);
         const kmRodados = kmFinal - kmInicialDB;
@@ -852,6 +898,9 @@ async function processarEntradaKmFinal(bot, msg) {
             message_id: solicitacao.messageIds.solicitante, // Edita a mensagem de status principal
             parse_mode: 'Markdown'
         });
+
+        stateManager.setRequest(sessao.codigoSolicitacao, solicitacao);
+        await atualizarMensagemVistoriador(bot, solicitacao);
 
         await stateManager.deleteSession(userId);
         stateManager.deleteRequest(sessao.codigoSolicitacao);
