@@ -49,9 +49,37 @@ async function checkUsuarioExistsDB(cpf, matricula) {
 async function getSessionFromDB(userId) {
     try {
         const [rows] = await pool.execute('SELECT session_data FROM user_sessions WHERE telegram_id = ?', [userId]);
-        return rows.length > 0 ? JSON.parse(rows[0].session_data) : null;
+        
+        if (rows.length === 0) {
+            return null; // Nenhuma sessão encontrada
+        }
+
+        const sessionData = rows[0].session_data;
+
+        // VERIFICAÇÃO PRINCIPAL:
+        // Se o driver do banco de dados já converteu o campo JSON em um objeto,
+        // o retornamos diretamente, sem tentar fazer o parse novamente.
+        if (typeof sessionData === 'object' && sessionData !== null) {
+            return sessionData;
+        }
+
+        // Se, por algum motivo, o dado vier como texto (ex: coluna tipo TEXT),
+        // tentamos fazer o parse para manter a compatibilidade.
+        if (typeof sessionData === 'string') {
+            // Se a string for "[object Object]", é um sinal de erro na gravação. Retorna null.
+            if (sessionData === '[object Object]') {
+                console.warn(`Sessão inválida (dado como '[object Object]') para o usuário ${userId}. Removendo.`);
+                await deleteSessionFromDB(userId);
+                return null;
+            }
+            return JSON.parse(sessionData);
+        }
+
+        // Se não for nem objeto nem string, é um dado inesperado.
+        return null;
+
     } catch (error) {
-        console.error('Erro em getSessionFromDB:', error);
+        console.error(`Erro crítico em getSessionFromDB para o usuário ${userId}:`, error);
         throw error;
     }
 }
@@ -200,13 +228,18 @@ async function salvarSolicitacaoDB(solicitacao) {
 }
 
 // Atualiza o status e outros dados de uma solicitação existente.
-async function atualizarStatusSolicitacaoDB(codigoSolicitacao, novoStatus, dadosAdicionais = {}) {
+// db.js (versão corrigida)
+async function atualizarStatusSolicitacaoDB(codigoSolicitacao, novoStatus, dadosAdicionais = {}, dbConnection = null) {
+    const executor = dbConnection || pool; // Usa a conexão da transação se ela for passada
     try {
         let query = 'UPDATE logs_solicitacoes SET status_final = ?';
         const params = [novoStatus];
-
-        // Lista branca de campos permitidos para evitar injeção de SQL via nomes de colunas
-        const allowedFields = ['km_inicial', 'km_final', 'observacoes', 'viatura_id'];
+        
+        // Lista branca de campos permitidos para evitar injeção de SQL
+        const allowedFields = [
+            'viatura_prefixo', 'viatura_nome', 'viatura_placa', // Adicionado para esta transação
+            'km_inicial', 'km_final', 'observacoes', 'viatura_id'
+        ];
         const campos = Object.keys(dadosAdicionais).filter(campo => allowedFields.includes(campo));
         for (const campo of campos) {
             query += `, ${campo} = ?`;
@@ -220,7 +253,7 @@ async function atualizarStatusSolicitacaoDB(codigoSolicitacao, novoStatus, dados
         query += ' WHERE codigo_solicitacao = ?';
         params.push(codigoSolicitacao);
 
-        await pool.execute(query, params);
+        await executor.execute(query, params); // <-- USA O EXECUTOR (CONEXÃO OU POOL)
         return true;
     } catch (error) {
         console.error('Erro em atualizarStatusSolicitacaoDB:', error);

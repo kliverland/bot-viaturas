@@ -19,7 +19,7 @@ function init(bot) {
         const usuario = await authService.verificarAcesso(bot, msg);
         if (!usuario) return;
 
-        let welcomeMessage = `🚗 *Bot de Solicitação de Viaturas* 🚗\n\nBem-vindo, ${usuario.nome}!\n\n*Comandos disponíveis:*\n• /solicitarviatura - Solicitar uma viatura\n• /status - Ver status das suas solicitações\n• /help - Ajuda`;
+        let welcomeMessage = `🚗 *Bot de Solicitação de Viaturas* 🚗\n\nBem-vindo, ${escapeMarkdown(usuario.nome)}!\n\n*Comandos disponíveis:*\n• /solicitarviatura - Solicitar uma viatura\n• /status - Ver status das suas solicitações\n• /help - Ajuda`;
         if (utils.temPermissao(usuario.tipo_usuario, 'vistoriador')) {
             welcomeMessage += `\n\n*Comandos do Vistoriador:*\n• /addviatura - Cadastrar nova viatura\n• /listviaturas - Ver todas as viaturas\n• /adduser - Pré-cadastrar novo usuário\n• /updatestatus - Atualizar status de viatura`;
         }
@@ -70,10 +70,10 @@ function init(bot) {
             }
             let mensagem = '*🚗 VIATURAS CADASTRADAS:*\n\n';
             rows.forEach(viatura => {
-                mensagem += `${config.STATUS_VIATURAS[viatura.status] || '⚪ Status Desconhecido'} *${viatura.prefixo}*\n`;
-                mensagem += `• Nome: ${viatura.nome}\n`;
-                mensagem += `• Modelo: ${viatura.modelo || 'N/I'}\n`;
-                mensagem += `• Placa: ${viatura.placa || 'N/I'}\n`;
+                mensagem += `${config.STATUS_VIATURAS[viatura.status] || '⚪ Status Desconhecido'} *${escapeMarkdown(viatura.prefixo)}*\n`;
+                mensagem += `• Nome: ${escapeMarkdown(viatura.nome)}\n`;
+                mensagem += `• Modelo: ${escapeMarkdown(viatura.modelo || 'N/I')}\n`;
+                mensagem += `• Placa: ${escapeMarkdown(viatura.placa || 'N/I')}\n`;
                 mensagem += `• KM: ${parseInt(viatura.km_atual || 0).toLocaleString('pt-BR')}\n\n`;
             });
             const totalDisponiveis = rows.filter(v => v.status === 'disponivel').length;
@@ -123,12 +123,12 @@ Antes de prosseguir, você deve estar ciente das seguintes responsabilidades:
             let mensagem = '*📋 SUAS SOLICITAÇÕES:*\n\n';
             const statusEmoji = { 'aguardando_vistoria': '🟡', 'em_vistoria': '🟠', 'aguardando_autorizacao': '🔵', 'autorizada': '✅', 'negada': '❌', 'entregue': '🚗', 'finalizada': '🏁' };
             rows.forEach(sol => {
-                mensagem += `${statusEmoji[sol.status_final] || '⚪'} *${sol.codigo_solicitacao}*\n`;
-                mensagem += `• Status: ${sol.status_final.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Desconhecido'}\n`;
+                mensagem += `${statusEmoji[sol.status_final] || '⚪'} *${escapeMarkdown(sol.codigo_solicitacao)}*\n`;
+                mensagem += `• Status: ${escapeMarkdown(sol.status_final.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Desconhecido')}\n`;
                 mensagem += `• Solicitação: ${new Date(sol.data_solicitacao).toLocaleString('pt-BR')}\n`;
                 mensagem += `• Necessidade: ${new Date(sol.data_necessidade).toLocaleString('pt-BR')}\n`;
-                if (sol.motivo) mensagem += `• Motivo: ${sol.motivo}\n`;
-                if (sol.viatura_prefixo) mensagem += `• Viatura: ${sol.viatura_prefixo}\n`;
+                if (sol.motivo) mensagem += `• Motivo: ${escapeMarkdown(sol.motivo)}\n`;
+                if (sol.viatura_prefixo) mensagem += `• Viatura: ${escapeMarkdown(sol.viatura_prefixo)}\n`;
                 mensagem += '\n';
             });
             bot.sendMessage(msg.chat.id, mensagem, { parse_mode: 'Markdown' });
@@ -195,9 +195,9 @@ Antes de prosseguir, você deve estar ciente das seguintes responsabilidades:
         const usuario = await authService.verificarAcesso(bot, msg);
         if (!usuario) return;
         const vistoriadores = await db.getUsuariosPorTipoDB('vistoriador');
-        let debugMessage = `🔍 *DEBUG - Informações do Sistema*\n\n👤 *Seus dados:*\n• ID: ${msg.from.id}\n• Nome: ${usuario.nome}\n• Tipo: ${usuario.tipo_usuario}\n\n`;
+        let debugMessage = `🔍 *DEBUG - Informações do Sistema*\n\n👤 *Seus dados:*\n• ID: ${msg.from.id}\n• Nome: ${escapeMarkdown(usuario.nome)}\n• Tipo: ${usuario.tipo_usuario}\n\n`;
         debugMessage += `👥 *Vistoriadores (${vistoriadores.length}):*\n`;
-        vistoriadores.forEach((v, i) => { debugMessage += `${i + 1}. ${v.nome} (Telegram ID: ${v.telegram_id}) ${v.telegram_id == msg.from.id ? '← VOCÊ' : ''}\n`; });
+        vistoriadores.forEach((v, i) => { debugMessage += `${i + 1}. ${escapeMarkdown(v.nome)} (Telegram ID: ${v.telegram_id}) ${v.telegram_id == msg.from.id ? '← VOCÊ' : ''}\n`; });
         if (vistoriadores.length === 0) {
             debugMessage += `⚠️ *PROBLEMA: Nenhum vistoriador encontrado no banco!*\n`;
         }
@@ -299,30 +299,28 @@ Antes de prosseguir, você deve estar ciente das seguintes responsabilidades:
         }
 
         // >>> ALTERAÇÃO: Novo fluxo de aceitar responsabilidade <<<
-        if (data.startsWith('aceitar_responsabilidade_')) {
-            const solicitanteIdOriginal = data.split('_')[2];
-            if (userIdClicou.toString() !== solicitanteIdOriginal) {
-                bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Esta ação não é sua.' });
-                return;
-            }
-            const usuarioAuth = await authService.verificarAutenticacao(userIdClicou);
-            const nomeUsuario = usuarioAuth ? usuarioAuth.nome : callbackQuery.from.first_name;
-            
-            // Inicia a sessão para o novo fluxo interativo
-            await stateManager.setSession(userIdClicou, { 
-                nomeUsuario: nomeUsuario, 
-                chatId: chatId,
-                // Salva o ID da mensagem que será editada
-                interactiveMessageId: message.message_id 
-            });
-            
-            // Chama a primeira função do novo fluxo
-            requestService.solicitarData(bot, userIdClicou); 
-            bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Termos aceitos! Continue...' });
-            return;
-        }
-
-
+    if (data.startsWith('aceitar_responsabilidade_')) {
+        const solicitanteIdOriginal = data.split('_')[2];
+    if (userIdClicou.toString() !== solicitanteIdOriginal) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Esta ação não é sua.' });
+    return;
+    }
+    const usuarioAuth = await authService.verificarAutenticacao(userIdClicou);
+    const nomeUsuario = usuarioAuth ? usuarioAuth.nome : callbackQuery.from.first_name;
+    
+    // Inicia a sessão para o novo fluxo interativo
+    await stateManager.setSession(userIdClicou, { 
+        nomeUsuario: nomeUsuario, 
+        chatId: chatId,
+        // Salva o ID da "Mensagem A" que será editada durante o fluxo
+        interactiveMessageId: message.message_id 
+    });
+    
+    // Inicia o fluxo de coleta de dados editando a mensagem
+    await requestService.solicitarData(bot, userIdClicou); // Esta função será alterada
+    bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Termos aceitos! Prossiga...' });
+    return;
+}
         // Handler para cancelar solicitação
         if (data.startsWith('cancelar_solicitacao_')) {
             const solicitanteIdOriginal = data.split('_')[2];
@@ -355,46 +353,9 @@ Agora você precisa informar a quilometragem inicial da viatura.
                 parse_mode: 'Markdown' 
             });
 
-            requestService.solicitarKmInicial(bot, chatId, userIdClicou, codigoSolicitacao);
-            bot.answerCallbackQuery(callbackQuery.id, { text: '📊 Informe o KM inicial' });
-            return;
-        }
-
-        // Handler para informar KM final
-        if (data.startsWith('km_final_')) {
-            const [_, __, codigoSolicitacao, solicitanteIdOriginal] = data.split('_');
+            await requestService.solicitarKmInicial(bot, message, userIdClicou, codigoSolicitacao);
             
-            if (userIdClicou.toString() !== solicitanteIdOriginal) {
-                bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Esta ação não é sua.' });
-                return;
-            }
-
-            try {
-                const kmInicial = await db.getKmInicialSolicitacao(codigoSolicitacao);
-                if (!kmInicial) {
-                    bot.answerCallbackQuery(callbackQuery.id, { text: '❌ KM inicial não encontrado.' });
-                    return;
-                }
-
-                const solicitacao = stateManager.getRequest(codigoSolicitacao);
-                await bot.editMessageText(`
-📊 *INFORMAR KM FINAL - ${codigoSolicitacao}*
-
-✅ KM inicial: ${kmInicial.toLocaleString('pt-BR')}
-
-Digite a quilometragem final da viatura:
-                `, { 
-                    chat_id: chatId, 
-                    message_id: solicitacao.messageIds.solicitante,
-                    parse_mode: 'Markdown' 
-                });
-
-                requestService.solicitarKmFinal(bot, chatId, userIdClicou, codigoSolicitacao, kmInicial);
-                bot.answerCallbackQuery(callbackQuery.id, { text: '📊 Informe o KM final' });
-            } catch (error) {
-                console.error('Erro ao buscar KM inicial:', error);
-                bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Erro ao processar solicitação.' });
-            }
+            bot.answerCallbackQuery(callbackQuery.id, { text: '📊 Informe o KM inicial...' });
             return;
         }
         
